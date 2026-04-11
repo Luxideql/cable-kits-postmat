@@ -120,6 +120,28 @@ function routeAction(action, params) {
       initSheets();
       return { success: true, message: 'Таблицы инициализированы' };
 
+    case 'initPlan':
+      // Установка начального плана и первого менеджера (без авторизации)
+      var planQty  = Number(params.plan_qty  || 10);
+      var tgId     = params.telegram_id || '';
+      var fio      = params.fio         || 'Администратор';
+      createPlan(getMoscowDate(), planQty, 'Начальный план');
+      if (tgId) {
+        var existing = getEmployeeByTelegramId(tgId);
+        if (!existing) registerEmployee(tgId, fio, '');
+        // Повышаем до мастера
+        var s = getSheet('Сотрудники');
+        var data = s.getDataRange().getValues();
+        var h = data[0];
+        var ci = h.indexOf('Telegram_id'), cr = h.indexOf('Роль');
+        for (var ri = 1; ri < data.length; ri++) {
+          if (String(data[ri][ci]) === String(tgId)) {
+            s.getRange(ri+1, cr+1).setValue('мастер');
+          }
+        }
+      }
+      return { success: true, message: 'План ' + planQty + ' установлен', plan_qty: planQty };
+
     default:
       return { success: false, error: 'Неизвестный action: "' + action + '"' };
   }

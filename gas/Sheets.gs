@@ -3,10 +3,10 @@
 // Sheets.gs — CRUD слой
 // ==========================================
 
-// --- Константа: ID таблицы (задаётся один раз при деплое) ---
+// --- Константа: ID таблицы ---
 var SPREADSHEET_ID = PropertiesService
   .getScriptProperties()
-  .getProperty('SPREADSHEET_ID') || '';
+  .getProperty('SPREADSHEET_ID') || '1_M6Gp13wPXGKgp6diKq3vJNWZQBb5d_DNfGUuSMy4a0';
 
 // ------------------------------------------------------------------
 // Базовые утилиты

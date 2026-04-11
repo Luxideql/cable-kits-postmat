@@ -6,7 +6,7 @@
 var API = (function () {
 
   // !! Замените на URL вашего задеплоенного GAS Web App !!
-  var GAS_URL = window.GAS_URL || 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+  var GAS_URL = window.GAS_URL || 'https://script.google.com/macros/s/AKfycbyOmDbDcEavQH1VMT7TJu_AMevT2b-3Wkl97_aHB1Dx3Hbze0F2FidOf7Yddgw5nSqnAA/exec';
 
   var TIMEOUT_MS = 15000;
 
