@@ -1,0 +1,52 @@
+name: Deploy GAS Backend
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'gas/**'
+  workflow_dispatch:
+
+jobs:
+  deploy-gas:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      # Восстанавливаем авторизацию clasp из секрета
+      - name: Restore clasp credentials
+        env:
+          CLASP_CREDENTIALS: ${{ secrets.CLASP_CREDENTIALS }}
+        run: |
+          echo "$CLASP_CREDENTIALS" > ~/.clasprc.json
+          echo "✅ clasp credentials восстановлены"
+
+      # Восстанавливаем .clasp.json из секрета
+      - name: Restore .clasp.json
+        env:
+          CLASP_JSON: ${{ secrets.CLASP_JSON }}
+        run: |
+          echo "$CLASP_JSON" > .clasp.json
+          echo "✅ .clasp.json восстановлен"
+
+      # Push кода в Apps Script
+      - name: Push to Apps Script
+        run: npx clasp push --force
+
+      # Создаём новый деплой
+      - name: Deploy new version
+        run: |
+          VERSION=$(node -e "console.log(require('./package.json').version)")
+          npx clasp deploy --description "v${VERSION} auto-deploy"
+          echo "✅ GAS задеплоен"

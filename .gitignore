@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.local
+
+# clasp credentials — НЕ коммитим
+.clasprc.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*

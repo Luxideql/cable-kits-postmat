@@ -1,0 +1,58 @@
+name: Deploy Frontend to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:   # ручной запуск из интерфейса GitHub
+
+permissions:
+  contents: read
+  pages:    write
+  id-token: write
+
+concurrency:
+  group:          "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Подставляем GAS_URL из секретов GitHub
+      - name: Inject GAS_URL into api.js
+        env:
+          GAS_URL: ${{ secrets.GAS_URL }}
+        run: |
+          if [ -n "$GAS_URL" ]; then
+            sed -i "s|var GAS_URL = window.GAS_URL || '.*'|var GAS_URL = window.GAS_URL || '$GAS_URL'|g" frontend/api.js
+            echo "✅ GAS_URL подставлен в api.js"
+          else
+            echo "⚠️ Секрет GAS_URL не задан — URL остаётся как есть"
+          fi
+
+      # 3. Настраиваем GitHub Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      # 4. Загружаем папку frontend как артефакт
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './frontend'
+
+      # 5. Деплоим на GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

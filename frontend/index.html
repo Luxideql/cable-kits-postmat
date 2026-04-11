@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2481cc">
+  <title>Кабельные комплекты</title>
+
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============================
+     LOADER
+     ============================ -->
+<div id="loader-wrap">
+  <div class="loader-spinner"></div>
+  <p>Загрузка...</p>
+</div>
+
+<!-- ============================
+     КОНФИГ ПАНЕЛЬ (первый запуск)
+     ============================ -->
+<div id="config-panel" class="hidden"></div>
+
+<!-- ============================
+     ГЛОБАЛЬНАЯ ОШИБКА
+     ============================ -->
+<div id="global-error" class="hidden"></div>
+
+<!-- ============================
+     TOAST
+     ============================ -->
+<div id="toast" class="toast"></div>
+
+<!-- ============================
+     РЕЗУЛЬТАТ МОДАЛ
+     ============================ -->
+<div id="result-modal" class="result-modal hidden">
+  <div class="result-modal__inner">
+    <div id="result-modal-icon" class="result-icon">✓</div>
+    <div id="result-modal-msg"></div>
+  </div>
+</div>
+
+<!-- ============================
+     ШАПКА
+     ============================ -->
+<header class="app-header">
+  <div class="header-top">
+    <div>
+      <div class="header-name" id="header-name">...</div>
+      <div class="header-plan" id="header-plan">План: —</div>
+    </div>
+    <div style="text-align:right">
+      <div class="header-date" id="header-date"></div>
+    </div>
+  </div>
+
+  <div class="header-stats">
+    <div class="header-stat">
+      <div class="header-stat__val" id="header-ready">—</div>
+      <div class="header-stat__lbl">Готово</div>
+    </div>
+    <div class="header-stat">
+      <div class="header-stat__val" id="header-left">—</div>
+      <div class="header-stat__lbl">Осталось</div>
+    </div>
+  </div>
+
+  <div class="header-progress">
+    <div class="progress-bar">
+      <div class="progress-bar-fill" id="progress-bar-fill" style="width:0%"></div>
+    </div>
+    <div id="progress-pct">0%</div>
+  </div>
+</header>
+
+<!-- ============================
+     ОСНОВНОЙ КОНТЕНТ
+     ============================ -->
+<main class="app-content">
+
+  <!-- ---- ДАШБОРД ---- -->
+  <div id="screen-dashboard" class="screen hidden">
+
+    <!-- Большой счётчик -->
+    <div class="dash-counter">
+      <div class="dash-counter__ready" id="dash-ready">0</div>
+      <div class="dash-counter__plan"  id="dash-plan">из 0</div>
+      <div class="dash-counter__left" id="dash-left">Осталось: —</div>
+      <div class="dash-progress">
+        <div class="dash-progress__bar">
+          <div class="dash-progress__fill" id="dash-progress-fill" style="width:0%"></div>
+        </div>
+        <div class="dash-progress__pct" id="dash-pct">0%</div>
+      </div>
+    </div>
+
+    <!-- Узкое место -->
+    <div id="dash-bottleneck" class="dash-bottleneck hidden">
+      <div class="dash-bn__title">🔴 Узкое место</div>
+      <div class="dash-bn__length" id="dash-bn-length">—</div>
+      <div id="dash-bn-actions"></div>
+    </div>
+
+    <!-- Карточка действия -->
+    <div class="section-title">Что делать сейчас</div>
+    <div id="dash-action-card"></div>
+
+    <!-- Обновить -->
+    <button class="refresh-btn" onclick="App.refresh()">
+      ↻ Обновить данные
+    </button>
+  </div>
+
+  <!-- ---- СПИСОК ПРИОРИТЕТОВ ---- -->
+  <div id="screen-list" class="screen hidden">
+    <div class="section-title">Список по приоритету</div>
+    <div id="list-wrap">
+      <div class="empty-state">Загрузка...</div>
+    </div>
+  </div>
+
+  <!-- ---- ФОРМА ДОБАВЛЕНИЯ ---- -->
+  <div id="screen-add" class="screen hidden">
+    <div class="section-title">Внести производство</div>
+    <div id="add-form-wrap"></div>
+
+    <button class="btn btn--submit" onclick="App.submitAddForm()">
+      ✓ Сохранить
+    </button>
+  </div>
+
+  <!-- ---- МЕНЕДЖЕР ---- -->
+  <div id="screen-manager" class="screen hidden">
+    <div class="section-title">Дашборд мастера</div>
+    <div id="manager-wrap">
+      <div class="empty-state">Загрузка...</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ============================
+     НИЖНЯЯ НАВИГАЦИЯ
+     ============================ -->
+<nav class="app-nav">
+  <button class="tab-btn" id="tab-dashboard" onclick="App.setTab('dashboard')">
+    <span class="tab-btn__icon">📊</span>
+    <span>Итог</span>
+  </button>
+
+  <button class="tab-btn" id="tab-list" onclick="App.setTab('list')">
+    <span class="tab-btn__icon">📋</span>
+    <span>Список</span>
+  </button>
+
+  <button class="tab-btn" id="tab-add" onclick="App.setTab('add')">
+    <span class="tab-btn__icon">➕</span>
+    <span>Внести</span>
+  </button>
+
+  <button class="tab-btn hidden" id="tab-manager" onclick="App.setTab('manager')">
+    <span class="tab-btn__icon">👔</span>
+    <span>Мастер</span>
+  </button>
+</nav>
+
+<!-- ============================
+     СКРИПТЫ
+     ============================ -->
+<script src="state.js"></script>
+<script src="telegram.js"></script>
+<script src="api.js"></script>
+<script src="ui.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>

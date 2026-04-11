@@ -1,0 +1,23 @@
+{
+  "name": "cable-kits-postmat",
+  "version": "1.0.0",
+  "description": "Кабельные комплекты для почтоматов — Telegram Web App",
+  "scripts": {
+    "setup":       "node scripts/setup.js",
+    "gas:push":    "clasp push",
+    "gas:deploy":  "clasp deploy --description \"v$(node -e \"console.log(require('./package.json').version)\")\"",
+    "gas:open":    "clasp open",
+    "gas:logs":    "clasp logs --watch",
+    "gas:init":    "clasp run initSheets",
+    "dev":         "npx serve frontend -p 3000",
+    "deploy":      "npm run gas:push && npm run gas:deploy",
+    "version:bump": "node scripts/bump-version.js"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.2",
+    "serve": "^14.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
