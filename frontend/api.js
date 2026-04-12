@@ -224,13 +224,12 @@ var API = (function () {
   }
 
   /**
-   * Корректирует остаток вручную (только менеджер).
+   * Корректирует остаток вручную.
    */
-  function setStock(telegramId, lengthMm, qty) {
+  function setStock(lengthMm, qty) {
     return post('setStock', {
-      telegram_id: telegramId,
-      length_mm:   lengthMm,
-      qty:         qty
+      length_mm: lengthMm,
+      qty:       qty
     });
   }
 

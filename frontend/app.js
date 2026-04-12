@@ -170,63 +170,39 @@ function _renderPositions() {
   var wrap = document.getElementById('pos-list');
   if (!r || !r.Длины) { wrap.innerHTML = ''; return; }
 
-  var ready = r.Готово_комплектов || 0;
-  var html  = '';
+  var html = '';
 
   r.Длины.forEach(function (L) {
-    var kits  = L.Хватает_на_комплектов || 0;
-    var isBn  = L.Узкое_место;
-    var def   = L.Дефицит || 0;
-    var need  = L.Нужно_для_следующего || 0;
-    var cls   = isBn ? 'pos-row pos-row--red' : (def > 0 ? 'pos-row pos-row--yellow' : 'pos-row pos-row--green');
+    var kits = L.Хватает_на_комплектов || 0;
+    var isBn = L.Узкое_место;
+    var def  = L.Дефицит || 0;
+    var need = L.Нужно_для_следующего || 0;
+    var cls  = isBn ? 'pos-row pos-row--red' : (def > 0 ? 'pos-row pos-row--yellow' : 'pos-row pos-row--green');
 
-    // Статус-строка
-    var status = '';
-    if (isBn) {
-      status = '<span class="pos-status pos-status--red">🔴 узкое место'
-        + (need > 0 ? ' · нужно ' + need + ' шт → +1 компл' : '') + '</span>';
-    } else if (def > 0) {
-      status = '<span class="pos-status pos-status--yellow">🟡 дефицит ' + def + ' шт</span>';
-    } else {
-      status = '<span class="pos-status pos-status--green">✅ норма</span>';
-    }
-
-    // Прогресс (сколько этот кабель позволяет vs min готовых)
-    var pct = kits > 0 && ready > 0 ? Math.min(100, Math.round(kits / Math.max(kits, ready) * 100)) : (kits > 0 ? 100 : 0);
+    var statusTxt = isBn
+      ? '<div class="pos-stat pos-stat--red">узкое место · нужно +' + need + ' шт</div>'
+      : (def > 0
+        ? '<div class="pos-stat pos-stat--yellow">нехватка ' + def + ' шт</div>'
+        : '<div class="pos-stat pos-stat--green">в норме</div>');
 
     html += '<div class="' + cls + '">'
-      // Заголовок строки
-      + '<div class="pos-head">'
+      + '<div class="pos-info">'
       +   '<div class="pos-len">' + L.Длина_мм + ' мм</div>'
-      +   status
+      +   '<div class="pos-need">×' + L.Количество_на_комплект + ' на компл.</div>'
       + '</div>'
-      // Метрики
-      + '<div class="pos-metrics">'
-      +   '<div class="pos-metric">'
-      +     '<div class="pos-metric__val">×' + L.Количество_на_комплект + '</div>'
-      +     '<div class="pos-metric__lbl">на компл.</div>'
-      +   '</div>'
-      +   '<div class="pos-metric pos-metric--stock" data-len="' + L.Длина_мм + '">'
-      +     '<div class="pos-metric__val stock-val" id="stock-val-' + L.Длина_мм + '">' + L.Остаток + '</div>'
-      +     '<div class="pos-metric__lbl">остаток, шт ✎</div>'
-      +   '</div>'
-      +   '<div class="pos-metric">'
-      +     '<div class="pos-metric__val ' + (isBn ? 'val--red' : '') + '">' + kits + '</div>'
-      +     '<div class="pos-metric__lbl">компл. хватает</div>'
-      +   '</div>'
-      +   '<div class="pos-metric">'
-      +     '<div class="pos-metric__val">' + L.Количество_на_комплект * ready + '</div>'
-      +     '<div class="pos-metric__lbl">использовано</div>'
-      +   '</div>'
+      + '<div class="pos-stock pos-metric--stock" data-len="' + L.Длина_мм + '">'
+      +   '<div class="stock-val" id="stock-val-' + L.Длина_мм + '">' + L.Остаток + '</div>'
+      +   '<div class="pos-stock-lbl">остаток ✎</div>'
       + '</div>'
-      // Прогресс-бар
-      + '<div class="pos-bar"><div class="pos-bar__fill pos-bar__fill--' + (isBn ? 'red' : (def > 0 ? 'yellow' : 'green')) + '" style="width:' + pct + '%"></div></div>'
+      + '<div class="pos-right">'
+      +   '<div class="pos-kits ' + (isBn ? 'pos-kits--red' : '') + '">' + kits + ' компл.</div>'
+      +   statusTxt
+      + '</div>'
       + '</div>';
   });
 
   wrap.innerHTML = html;
 
-  // Вешаем обработчики на ячейки остатка
   wrap.querySelectorAll('.pos-metric--stock').forEach(function (cell) {
     cell.addEventListener('click', function () {
       _editStock(cell, Number(cell.dataset.len));
@@ -284,7 +260,7 @@ function _editStock(cell, lengthMm) {
 function _saveStock(inp, lengthMm, newQty, oldQty) {
   inp.disabled = true;
 
-  API.setStock(_getTgId(), lengthMm, newQty)
+  API.setStock(lengthMm, newQty)
     .then(function (res) {
       if (res.readiness) _readiness = res.readiness;
       _renderPositions();
