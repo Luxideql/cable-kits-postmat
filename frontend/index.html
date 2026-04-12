@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#2481cc">
   <title>Кабельные комплекты</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css?v=20260413">
+  <link rel="stylesheet" href="style.css?v=20260413b">
 </head>
 <body>
 
@@ -19,7 +19,12 @@
 <!-- Шапка -->
 <header class="hdr">
   <div class="hdr-title">📦 Кабельные комплекты</div>
-  <div class="hdr-date" id="hdr-date"></div>
+  <div class="hdr-right">
+    <div class="hdr-date" id="hdr-date"></div>
+    <a class="hdr-sheets" href="https://docs.google.com/spreadsheets/d/1_M6Gp13wPXGKgp6diKq3vJNWZQBb5d_DNfGUuSMy4a0/edit" target="_blank" title="Открыть таблицу">
+      📊 Таблица
+    </a>
+  </div>
 </header>
 
 <!-- Форма ввода -->
@@ -64,19 +69,12 @@
 
   <div id="bn-block" class="bn-block hidden"></div>
 
-  <div class="section-label">Позиции</div>
-  <table class="pos-table" id="pos-table">
-    <thead>
-      <tr>
-        <th>Длина</th>
-        <th>×компл</th>
-        <th>Остаток</th>
-        <th>Компл.</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody id="pos-body"></tbody>
-  </table>
+  <div class="section-label">
+    Остатки по позициям
+    <span class="edit-hint">— нажми на остаток чтобы изменить</span>
+  </div>
+
+  <div id="pos-list"></div>
 </div>
 
 <!-- Журнал -->
@@ -87,7 +85,7 @@
   </div>
 </div>
 
-<!-- Обновить -->
+<!-- Подвал -->
 <div class="footer-row">
   <button class="btn-refresh" id="btn-refresh">↻ Обновить</button>
   <span class="last-upd" id="last-upd"></span>
@@ -96,8 +94,8 @@
 <!-- Toast -->
 <div id="toast" class="toast"></div>
 
-<script src="api.js?v=20260413"></script>
-<script src="app.js?v=20260413"></script>
+<script src="api.js?v=20260413b"></script>
+<script src="app.js?v=20260413b"></script>
 
 </body>
 </html>

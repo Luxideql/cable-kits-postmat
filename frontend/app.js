@@ -171,26 +171,138 @@ function _renderStatus() {
 
 function _renderPositions() {
   var r    = _readiness;
-  var body = document.getElementById('pos-body');
-  if (!r || !r.Длины) { body.innerHTML = ''; return; }
+  var wrap = document.getElementById('pos-list');
+  if (!r || !r.Длины) { wrap.innerHTML = ''; return; }
 
-  var html = '';
+  var ready = r.Готово_комплектов || 0;
+  var html  = '';
+
   r.Длины.forEach(function (L) {
     var kits  = L.Хватает_на_комплектов || 0;
     var isBn  = L.Узкое_место;
     var def   = L.Дефицит || 0;
-    var cls   = isBn ? 'row-red' : (def > 0 ? 'row-yellow' : 'row-green');
-    var icon  = isBn ? '🔴' : (def > 0 ? '🟡' : '✅');
+    var need  = L.Нужно_для_следующего || 0;
+    var cls   = isBn ? 'pos-row pos-row--red' : (def > 0 ? 'pos-row pos-row--yellow' : 'pos-row pos-row--green');
 
-    html += '<tr class="' + cls + '">'
-      + '<td class="td-len">' + L.Длина_мм + ' мм</td>'
-      + '<td>×' + L.Количество_на_комплект + '</td>'
-      + '<td>' + L.Остаток + ' шт</td>'
-      + '<td><strong>' + kits + '</strong></td>'
-      + '<td>' + icon + '</td>'
-      + '</tr>';
+    // Статус-строка
+    var status = '';
+    if (isBn) {
+      status = '<span class="pos-status pos-status--red">🔴 узкое место'
+        + (need > 0 ? ' · нужно ' + need + ' шт → +1 компл' : '') + '</span>';
+    } else if (def > 0) {
+      status = '<span class="pos-status pos-status--yellow">🟡 дефицит ' + def + ' шт</span>';
+    } else {
+      status = '<span class="pos-status pos-status--green">✅ норма</span>';
+    }
+
+    // Прогресс (сколько этот кабель позволяет vs min готовых)
+    var pct = kits > 0 && ready > 0 ? Math.min(100, Math.round(kits / Math.max(kits, ready) * 100)) : (kits > 0 ? 100 : 0);
+
+    html += '<div class="' + cls + '">'
+      // Заголовок строки
+      + '<div class="pos-head">'
+      +   '<div class="pos-len">' + L.Длина_мм + ' мм</div>'
+      +   status
+      + '</div>'
+      // Метрики
+      + '<div class="pos-metrics">'
+      +   '<div class="pos-metric">'
+      +     '<div class="pos-metric__val">×' + L.Количество_на_комплект + '</div>'
+      +     '<div class="pos-metric__lbl">на компл.</div>'
+      +   '</div>'
+      +   '<div class="pos-metric pos-metric--stock" data-len="' + L.Длина_мм + '">'
+      +     '<div class="pos-metric__val stock-val" id="stock-val-' + L.Длина_мм + '">' + L.Остаток + '</div>'
+      +     '<div class="pos-metric__lbl">остаток, шт ✎</div>'
+      +   '</div>'
+      +   '<div class="pos-metric">'
+      +     '<div class="pos-metric__val ' + (isBn ? 'val--red' : '') + '">' + kits + '</div>'
+      +     '<div class="pos-metric__lbl">компл. хватает</div>'
+      +   '</div>'
+      +   '<div class="pos-metric">'
+      +     '<div class="pos-metric__val">' + L.Количество_на_комплект * ready + '</div>'
+      +     '<div class="pos-metric__lbl">использовано</div>'
+      +   '</div>'
+      + '</div>'
+      // Прогресс-бар
+      + '<div class="pos-bar"><div class="pos-bar__fill pos-bar__fill--' + (isBn ? 'red' : (def > 0 ? 'yellow' : 'green')) + '" style="width:' + pct + '%"></div></div>'
+      + '</div>';
   });
-  body.innerHTML = html;
+
+  wrap.innerHTML = html;
+
+  // Вешаем обработчики на ячейки остатка
+  wrap.querySelectorAll('.pos-metric--stock').forEach(function (cell) {
+    cell.addEventListener('click', function () {
+      _editStock(cell, Number(cell.dataset.len));
+    });
+  });
+}
+
+// ── Редактирование остатка ──────────────────────────────────────────
+
+function _editStock(cell, lengthMm) {
+  var valEl = cell.querySelector('.stock-val');
+  if (!valEl || cell.querySelector('input')) return; // уже редактируется
+
+  var cur = parseInt(valEl.textContent, 10) || 0;
+
+  var inp = document.createElement('input');
+  inp.type      = 'number';
+  inp.min       = '0';
+  inp.value     = cur;
+  inp.className = 'stock-input';
+
+  valEl.replaceWith(inp);
+  inp.focus();
+  inp.select();
+
+  function commit() {
+    var newQty = parseInt(inp.value, 10);
+    if (isNaN(newQty) || newQty < 0) newQty = cur;
+    if (newQty === cur) {
+      // Ничего не изменилось — просто восстанавливаем
+      var restored = document.createElement('div');
+      restored.className = 'pos-metric__val stock-val';
+      restored.id        = 'stock-val-' + lengthMm;
+      restored.textContent = cur;
+      inp.replaceWith(restored);
+      return;
+    }
+    _saveStock(inp, lengthMm, newQty, cur);
+  }
+
+  inp.addEventListener('blur',    commit);
+  inp.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter')  { inp.blur(); }
+    if (e.key === 'Escape') {
+      var restored = document.createElement('div');
+      restored.className   = 'pos-metric__val stock-val';
+      restored.id          = 'stock-val-' + lengthMm;
+      restored.textContent = cur;
+      inp.removeEventListener('blur', commit);
+      inp.replaceWith(restored);
+    }
+  });
+}
+
+function _saveStock(inp, lengthMm, newQty, oldQty) {
+  inp.disabled = true;
+
+  API.setStock('', lengthMm, newQty)
+    .then(function (res) {
+      if (res.readiness) _readiness = res.readiness;
+      _renderPositions();
+      _renderStatus();
+      _toast('Остаток ' + lengthMm + ' мм → ' + newQty + ' шт', 'ok');
+      _haptic('success');
+    })
+    .catch(function (err) {
+      _toast('Ошибка: ' + err.message, 'err');
+      // Восстанавливаем старое значение
+      var valEl = document.getElementById('stock-val-' + lengthMm);
+      if (valEl) valEl.textContent = oldQty;
+      _haptic('error');
+    });
 }
 
 function _renderJournal() {

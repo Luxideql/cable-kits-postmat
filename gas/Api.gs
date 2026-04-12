@@ -242,20 +242,17 @@ function apiSetPlan(params) {
 // ------------------------------------------------------------------
 
 function apiSetStock(params) {
-  var tgId   = params.telegram_id;
-  var lenMm  = params.length_mm;
-  var qty    = Number(params.qty);
+  var lenMm = params.length_mm;
+  var qty   = Number(params.qty);
 
-  if (!tgId)  return { success: false, error: 'Не указан telegram_id' };
-  if (!lenMm) return { success: false, error: 'Не указана длина' };
-
-  if (!isManager(tgId)) {
-    return { success: false, error: 'Недостаточно прав' };
-  }
+  if (!lenMm)         return { success: false, error: 'Не указана длина' };
+  if (isNaN(qty) || qty < 0) return { success: false, error: 'Некорректное количество' };
 
   setStock(lenMm, qty);
 
-  return { success: true, length_mm: lenMm, new_stock: qty };
+  // Возвращаем обновлённую готовность
+  var readiness = apiGetKitReadiness(params);
+  return { success: true, length_mm: lenMm, new_stock: qty, readiness: readiness };
 }
 
 // ------------------------------------------------------------------
