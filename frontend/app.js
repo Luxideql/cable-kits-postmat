@@ -30,7 +30,6 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   _loadAll(false);
-  _startAutoRefresh();
 });
 
 // ──────────────────────────────────────────
@@ -87,10 +86,7 @@ function _loadJournal(date) {
     .catch(function (err) { console.error('[Journal]', err); });
 }
 
-function _startAutoRefresh() {
-  if (_autoTimer) clearInterval(_autoTimer);
-  _autoTimer = setInterval(function () { _loadAll(false); }, 60000);
-}
+// Автообновление отключено — только кнопка ↻
 
 // ──────────────────────────────────────────
 // Отправка формы
@@ -288,7 +284,7 @@ function _editStock(cell, lengthMm) {
 function _saveStock(inp, lengthMm, newQty, oldQty) {
   inp.disabled = true;
 
-  API.setStock('', lengthMm, newQty)
+  API.setStock(_getTgId(), lengthMm, newQty)
     .then(function (res) {
       if (res.readiness) _readiness = res.readiness;
       _renderPositions();
