@@ -6,7 +6,7 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/deploy.yml'
-  workflow_dispatch:   # ручной запуск из интерфейса GitHub
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,33 +26,39 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      # 1. Checkout
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Подставляем GAS_URL из секретов GitHub
+      # Подставляем GAS_URL из секрета (python — без проблем со спецсимволами)
       - name: Inject GAS_URL into api.js
         env:
           GAS_URL: ${{ secrets.GAS_URL }}
         run: |
-          if [ -n "$GAS_URL" ]; then
-            sed -i "s|var GAS_URL = window.GAS_URL || '.*'|var GAS_URL = window.GAS_URL || '$GAS_URL'|g" frontend/api.js
-            echo "✅ GAS_URL подставлен в api.js"
-          else
-            echo "⚠️ Секрет GAS_URL не задан — URL остаётся как есть"
-          fi
+          python3 - <<'EOF'
+          import os, re
+          gas_url = os.environ.get('GAS_URL', '')
+          if not gas_url:
+              print("GAS_URL secret not set — skipping")
+              exit(0)
+          path = 'frontend/api.js'
+          content = open(path).read()
+          new_content = re.sub(
+              r"var GAS_URL = window\.GAS_URL \|\| '[^']*'",
+              f"var GAS_URL = window.GAS_URL || '{gas_url}'",
+              content
+          )
+          open(path, 'w').write(new_content)
+          print(f"GAS_URL injected: {gas_url[:60]}...")
+          EOF
 
-      # 3. Настраиваем GitHub Pages
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      # 4. Загружаем папку frontend как артефакт
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: './frontend'
 
-      # 5. Деплоим на GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
