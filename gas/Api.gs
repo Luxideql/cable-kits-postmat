@@ -86,29 +86,38 @@ function apiGetPriorityList(params) {
 // ------------------------------------------------------------------
 
 function apiAddProductionLog(params) {
-  var tgId    = params.telegram_id;
-  var lenMm   = params.length_mm;
-  var qty     = Number(params.qty || 0);
-  var comment = params.comment || '';
+  var tgId       = params.telegram_id || '';
+  var lenMm      = params.length_mm;
+  var qty        = Number(params.qty || 0);
+  var comment    = params.comment    || '';
+  var workerName = params.worker_name || '';  // имя из формы
+  var logDate    = params.log_date   || '';  // дата из формы (YYYY-MM-DD)
 
-  if (!tgId)  return { success: false, error: 'Не указан telegram_id' };
-  if (!lenMm) return { success: false, error: 'Не указана длина' };
+  if (!lenMm)   return { success: false, error: 'Не указана длина' };
   if (qty <= 0) return { success: false, error: 'Количество должно быть > 0' };
 
-  // Получаем или регистрируем сотрудника
-  var emp = getEmployeeByTelegramId(tgId);
-  if (!emp) {
-    emp = registerEmployee(tgId, params.fio || null, params.username || null);
+  // Если есть telegram_id — регистрируем сотрудника
+  var emp    = null;
+  var empId  = 0;
+  var empFio = workerName;
+
+  if (tgId) {
+    emp = getEmployeeByTelegramId(tgId);
+    if (!emp) emp = registerEmployee(tgId, workerName || params.fio || null, params.username || null);
+    empId = emp.id;
+    if (!empFio) empFio = emp.fio;
   }
 
-  // Записываем производство и обновляем остаток
+  if (!empFio) empFio = 'Сотрудник';
+
   var rowId = addProductionRow(
-    emp.id,
-    emp.fio,
+    empId,
+    empFio,
     tgId,
     lenMm,
     qty,
-    comment
+    comment,
+    logDate || null
   );
 
   // Пересчитываем готовность

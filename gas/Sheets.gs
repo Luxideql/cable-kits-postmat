@@ -212,10 +212,10 @@ function createPlan(date, planQty, comment) {
 /**
  * Записывает новую строку производства.
  */
-function addProductionRow(employeeId, employeeFio, telegramId, lengthMm, qty, comment) {
+function addProductionRow(employeeId, employeeFio, telegramId, lengthMm, qty, comment, logDate) {
   var sheet  = getSheet('Производство');
   var now    = new Date();
-  var date   = getMoscowDate(now);
+  var date   = logDate || getMoscowDate(now);
   var dt     = getMoscowDateTime(now);
   var newId  = sheet.getLastRow();
 

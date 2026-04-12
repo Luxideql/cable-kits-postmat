@@ -176,13 +176,15 @@ var API = (function () {
    * @param {string} comment
    * @param {number} kitsBefore — текущее кол-во комплектов (для расчёта дельты)
    */
-  function addProduction(telegramId, lengthMm, qty, comment, kitsBefore) {
+  function addProduction(telegramId, lengthMm, qty, comment, kitsBefore, workerName, logDate) {
     return post('addProductionLog', {
-      telegram_id:  telegramId,
+      telegram_id:  telegramId  || '',
       length_mm:    lengthMm,
       qty:          qty,
-      comment:      comment || '',
-      kits_before:  kitsBefore !== undefined ? kitsBefore : ''
+      comment:      comment     || '',
+      kits_before:  kitsBefore  !== undefined ? kitsBefore : '',
+      worker_name:  workerName  || '',
+      log_date:     logDate     || ''
     });
   }
 
