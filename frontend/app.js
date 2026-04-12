@@ -9,6 +9,26 @@ var App = (function () {
   var REFRESH_INTERVAL_MS = 60 * 1000; // авто-обновление каждые 60 сек
 
   // ------------------------------------------------------------------
+  // Личный план — хранится в localStorage по ключу "myplan_ДАТА_TGID"
+  // ------------------------------------------------------------------
+
+  function _planKey() {
+    var now = new Date();
+    var d   = now.getFullYear()
+      + '-' + String(now.getMonth() + 1).padStart(2, '0')
+      + '-' + String(now.getDate()).padStart(2, '0');
+    return 'myplan_' + d + '_' + (TG.getUserId() || 'anon');
+  }
+
+  function _loadSavedPlan() {
+    try { return Number(localStorage.getItem(_planKey())) || null; } catch (e) { return null; }
+  }
+
+  function _savePlan(qty) {
+    try { localStorage.setItem(_planKey(), String(qty)); } catch (e) {}
+  }
+
+  // ------------------------------------------------------------------
   // Инициализация
   // ------------------------------------------------------------------
 
@@ -64,7 +84,13 @@ var App = (function () {
       })
       .then(function () {
         UI.hideLoader();
-        _setTab('dashboard');
+        var saved = _loadSavedPlan();
+        if (saved) {
+          AppState.set({ personalPlan: saved });
+          _setTab('dashboard');
+        } else {
+          _showWelcomeScreen();
+        }
         _startAutoRefresh();
         console.log('[App] Готово.');
       })
@@ -98,6 +124,50 @@ var App = (function () {
         AppState.set({ error: err.message });
         throw err;
       });
+  }
+
+  // ------------------------------------------------------------------
+  // Экран приветствия и выбора плана
+  // ------------------------------------------------------------------
+
+  function _showWelcomeScreen() {
+    var emp  = AppState.get().employee;
+    var name = emp ? emp.fio : 'Сотрудник';
+    UI.renderWelcomeScreen(name, 20, AppState.get().readiness);
+  }
+
+  /** Пользователь нажал «Приступить к работе» */
+  function startWork() {
+    var inp = document.getElementById('welcome-plan-qty');
+    var qty = inp ? Math.max(1, parseInt(inp.value, 10) || 20) : 20;
+    AppState.set({ personalPlan: qty });
+    _savePlan(qty);
+    var screen = document.getElementById('welcome-screen');
+    if (screen) screen.classList.add('hidden');
+    _setTab('dashboard');
+    TG.hapticSuccess();
+  }
+
+  /** Кнопки −/+ на экране приветствия */
+  function adjustPersonalPlan(delta) {
+    var inp = document.getElementById('welcome-plan-qty');
+    if (!inp) return;
+    var val = Math.max(1, (parseInt(inp.value, 10) || 20) + delta);
+    inp.value = val;
+    UI.renderWelcomeNeeds(val, AppState.get().readiness);
+    TG.haptic('light');
+  }
+
+  /** Пользователь вручную изменил число в поле */
+  function onPlanInput(val) {
+    var qty = Math.max(1, parseInt(val, 10) || 20);
+    UI.renderWelcomeNeeds(qty, AppState.get().readiness);
+  }
+
+  /** Повторный выбор плана из дашборда */
+  function changePlan() {
+    _showWelcomeScreen();
+    TG.haptic('light');
   }
 
   // ------------------------------------------------------------------
@@ -340,15 +410,19 @@ var App = (function () {
   // ------------------------------------------------------------------
 
   return {
-    init:           init,
-    setTab:         setTab,
-    openAddForm:    openAddForm,
-    onLengthChange: onLengthChange,
-    setQty:         setQty,
-    submitAddForm:  submitAddForm,
-    refresh:        refresh,
-    saveConfig:     saveConfig,
-    setPlan:        setPlan
+    init:                init,
+    setTab:              setTab,
+    openAddForm:         openAddForm,
+    onLengthChange:      onLengthChange,
+    setQty:              setQty,
+    submitAddForm:       submitAddForm,
+    refresh:             refresh,
+    saveConfig:          saveConfig,
+    setPlan:             setPlan,
+    startWork:           startWork,
+    adjustPersonalPlan:  adjustPersonalPlan,
+    onPlanInput:         onPlanInput,
+    changePlan:          changePlan
   };
 
 })();

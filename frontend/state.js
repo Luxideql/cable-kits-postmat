@@ -28,7 +28,10 @@ var AppState = (function () {
     error:           null,
 
     // Последнее действие-результат
-    lastAction: null    // { message, delta_kits }
+    lastAction: null,    // { message, delta_kits }
+
+    // Личный план сотрудника на сегодня (выбирается при входе)
+    personalPlan: null
   };
 
   var _listeners = [];
@@ -85,6 +88,10 @@ var AppState = (function () {
       : [];
   }
 
+  function getPersonalPlan() {
+    return _state.personalPlan;
+  }
+
   return {
     get:          get,
     set:          set,
@@ -92,9 +99,10 @@ var AppState = (function () {
     isManager:    isManager,
     getReadyKits: getReadyKits,
     getPlanKits:  getPlanKits,
-    getBottleneck:getBottleneck,
-    getLengths:   getLengths,
-    getWhatToDo:  getWhatToDo
+    getBottleneck:  getBottleneck,
+    getLengths:     getLengths,
+    getWhatToDo:    getWhatToDo,
+    getPersonalPlan:getPersonalPlan
   };
 
 })();

@@ -925,10 +925,213 @@ html, body {
 }
 
 /* ==========================================
+   ЭКРАН ПРИВЕТСТВИЯ / ВЫБОР ПЛАНА
+   ========================================== */
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--tg-bg);
+  z-index: 600;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.welcome-card {
+  width: 100%;
+  max-width: 480px;
+  padding: 40px 20px 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.welcome-emoji {
+  font-size: 64px;
+  line-height: 1;
+  margin-bottom: 16px;
+}
+
+.welcome-greeting {
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.welcome-subtitle {
+  font-size: 17px;
+  color: var(--tg-hint);
+  text-align: center;
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+
+/* Строка ввода плана */
+.welcome-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 32px;
+  justify-content: center;
+  width: 100%;
+}
+
+.plan-adj-btn {
+  min-width: 48px;
+  height: 48px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--tg-btn);
+  background: none;
+  color: var(--tg-btn);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.plan-adj-btn:active {
+  background: var(--tg-btn);
+  color: #fff;
+}
+
+.welcome-plan-input {
+  width: 110px;
+  text-align: center;
+  font-size: 52px;
+  font-weight: 800;
+  border: none;
+  border-bottom: 3px solid var(--tg-btn);
+  border-radius: 0;
+  background: transparent;
+  color: var(--tg-btn);
+  outline: none;
+  padding: 0 4px 4px;
+  appearance: none;
+  -moz-appearance: textfield;
+  -webkit-appearance: none;
+  font-family: var(--font);
+}
+
+.welcome-plan-input::-webkit-outer-spin-button,
+.welcome-plan-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Список нужных кабелей */
+.welcome-needs-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--tg-hint);
+  margin-bottom: 12px;
+  text-align: center;
+  width: 100%;
+}
+
+.welcome-needs-list {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.need-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  margin-bottom: 6px;
+}
+
+.need-row--deficit { background: var(--red-bg); }
+.need-row--ok      { background: var(--green-bg); }
+
+.need-row__len {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.need-row__len--red   { color: var(--red); }
+.need-row__len--green { color: var(--green); }
+
+.need-row__spec {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
+.need-row__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.need-row__need {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--red);
+}
+
+.need-row__stock {
+  font-size: 12px;
+  color: var(--tg-hint);
+}
+
+.need-row__ok {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+/* Кнопка «Приступить» — фиксированная внизу */
+.welcome-start-btn {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 0 !important;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 20px;
+  z-index: 601;
+  background: var(--tg-btn) !important;
+}
+
+/* Кнопка изменения плана на дашборде */
+.change-plan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto 12px;
+  padding: 8px 18px;
+  border: 1.5px solid var(--tg-btn);
+  border-radius: 24px;
+  background: none;
+  color: var(--tg-btn);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ==========================================
    АДАПТИВНОСТЬ (маленькие экраны)
    ========================================== */
 @media (max-width: 360px) {
   .card__stats { grid-template-columns: repeat(2, 1fr); }
   .mgr-stats   { grid-template-columns: repeat(2, 1fr); }
   .dash-counter__ready { font-size: 56px; }
+  .welcome-plan-input  { font-size: 44px; width: 90px; }
+  .plan-adj-btn        { min-width: 40px; font-size: 16px; }
 }

@@ -11,6 +11,14 @@ var UI = (function () {
 
   function el(id) { return document.getElementById(id); }
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   function setHTML(id, html) {
     var e = el(id);
     if (e) e.innerHTML = html;
@@ -114,19 +122,30 @@ var UI = (function () {
   // ------------------------------------------------------------------
 
   function renderHeader(state) {
-    var emp  = state.employee;
-    var r    = state.readiness;
+    var emp    = state.employee;
+    var r      = state.readiness;
+    var myPlan = state.personalPlan;
 
     setText('header-name', emp ? emp.fio : '...');
     setText('header-date', todayFormatted());
 
     if (r) {
-      var plan  = r.План_комплектов   || 0;
       var ready = r.Готово_комплектов || 0;
-      var left  = r.Осталось_комплектов || Math.max(0, plan - ready);
-      var pct   = r.Прогресс_процентов || 0;
 
-      setText('header-plan',  'План: ' + plan);
+      // Используем личный план если установлен, иначе менеджерский
+      var plan, left, pct;
+      if (myPlan) {
+        plan = myPlan;
+        left = Math.max(0, plan - ready);
+        pct  = plan > 0 ? Math.min(100, Math.round(ready / plan * 100)) : 0;
+        setText('header-plan', 'Мой план: ' + plan);
+      } else {
+        plan = r.План_комплектов || 0;
+        left = r.Осталось_комплектов || Math.max(0, plan - ready);
+        pct  = r.Прогресс_процентов || 0;
+        setText('header-plan', 'Общий план: ' + plan);
+      }
+
       setText('header-ready', String(ready));
       setText('header-left',  String(left));
 
@@ -143,20 +162,33 @@ var UI = (function () {
   // ------------------------------------------------------------------
 
   function renderDashboard(state) {
-    var r = state.readiness;
+    var r      = state.readiness;
+    var myPlan = state.personalPlan;
     if (!r) return;
 
-    var plan  = r.План_комплектов       || 0;
-    var ready = r.Готово_комплектов     || 0;
-    var left  = r.Осталось_комплектов   || Math.max(0, plan - ready);
-    var pct   = r.Прогресс_процентов    || 0;
-    var bn    = r.Узкое_место;
-    var todo  = r.Что_сделать_сейчас || [];
+    var ready = r.Готово_комплектов || 0;
+
+    // Прогресс по личному плану (если задан) или по менеджерскому
+    var plan, left, pct;
+    if (myPlan) {
+      plan = myPlan;
+      left = Math.max(0, plan - ready);
+      pct  = plan > 0 ? Math.min(100, Math.round(ready / plan * 100)) : 0;
+    } else {
+      plan = r.План_комплектов || 0;
+      left = r.Осталось_комплектов || Math.max(0, plan - ready);
+      pct  = r.Прогресс_процентов  || 0;
+    }
+
+    var bn   = r.Узкое_место;
+    var todo = r.Что_сделать_сейчас || [];
 
     // --- Большой счётчик ---
     setText('dash-ready', String(ready));
-    setText('dash-plan',  'из ' + plan);
-    setText('dash-left',  left > 0 ? ('Осталось: ' + left + ' ' + plural(left, 'комплект', 'комплекта', 'комплектов')) : 'План выполнен! 🎉');
+    setText('dash-plan',  'из ' + plan + (myPlan ? ' (мой план)' : ''));
+    setText('dash-left',  left > 0
+      ? ('Осталось: ' + left + ' ' + plural(left, 'комплект', 'комплекта', 'комплектов'))
+      : 'План выполнен! 🎉');
 
     setClass('dash-left', 'dash-left--done', left === 0);
 
@@ -186,6 +218,12 @@ var UI = (function () {
       } else {
         bnBlock.classList.add('hidden');
       }
+    }
+
+    // --- Кнопка изменения плана ---
+    var changePlanBtn = el('dash-change-plan');
+    if (changePlanBtn) {
+      changePlanBtn.style.display = myPlan ? 'inline-block' : 'none';
     }
 
     // --- Что делать сейчас (карточка действия) ---
@@ -537,6 +575,86 @@ var UI = (function () {
   }
 
   // ------------------------------------------------------------------
+  // Экран приветствия и выбора личного плана
+  // ------------------------------------------------------------------
+
+  function renderWelcomeScreen(name, defaultPlan, readiness) {
+    var screen = el('welcome-screen');
+    if (!screen) return;
+
+    var hour = new Date().getHours();
+    var greeting = hour < 12 ? 'Доброе утро' : (hour < 18 ? 'Добрый день' : 'Добрый вечер');
+
+    screen.innerHTML =
+      '<div class="welcome-card">'
+      + '<div class="welcome-emoji">📦</div>'
+      + '<div class="welcome-greeting">' + greeting + ', ' + escapeHtml(name) + '!</div>'
+      + '<div class="welcome-subtitle">Сколько комплектов<br>планируешь сегодня?</div>'
+
+      + '<div class="welcome-plan-row">'
+      +   '<button class="plan-adj-btn" onclick="App.adjustPersonalPlan(-5)">−5</button>'
+      +   '<button class="plan-adj-btn" onclick="App.adjustPersonalPlan(-1)">−</button>'
+      +   '<input type="number" id="welcome-plan-qty" class="welcome-plan-input"'
+      +     ' value="' + defaultPlan + '" min="1" max="999"'
+      +     ' oninput="App.onPlanInput(this.value)">'
+      +   '<button class="plan-adj-btn" onclick="App.adjustPersonalPlan(1)">+</button>'
+      +   '<button class="plan-adj-btn" onclick="App.adjustPersonalPlan(5)">+5</button>'
+      + '</div>'
+
+      + '<div id="welcome-needs"></div>'
+
+      + '<button class="btn btn--primary welcome-start-btn" onclick="App.startWork()">'
+      +   'Приступить к работе →'
+      + '</button>'
+      + '</div>';
+
+    screen.classList.remove('hidden');
+    renderWelcomeNeeds(defaultPlan, readiness);
+  }
+
+  /**
+   * Рендерит список «что нужно приготовить» для выбранного количества комплектов.
+   * Расчёт: нужно = qty_per_kit × plan − stock (≥ 0)
+   */
+  function renderWelcomeNeeds(planQty, readiness) {
+    var wrap = el('welcome-needs');
+    if (!wrap) return;
+
+    if (!readiness || !readiness.Длины || readiness.Длины.length === 0) {
+      wrap.innerHTML = '';
+      return;
+    }
+
+    var n = Math.max(1, parseInt(planQty, 10) || 20);
+    var lengths = readiness.Длины;
+
+    var html = '<div class="welcome-needs-title">Нужно приготовить для ' + n + ' ' + plural(n, 'комплекта', 'комплектов', 'комплектов') + ':</div>'
+      + '<div class="welcome-needs-list">';
+
+    lengths.forEach(function (L) {
+      var totalNeeded = L.Количество_на_комплект * n;
+      var deficit     = Math.max(0, totalNeeded - L.Остаток);
+      var cls = deficit > 0 ? 'need-row need-row--deficit' : 'need-row need-row--ok';
+      var lenCls = deficit > 0 ? 'need-row__len need-row__len--red' : 'need-row__len need-row__len--green';
+
+      html += '<div class="' + cls + '">'
+        + '<div class="' + lenCls + '">' + L.Длина_мм + ' мм'
+        +   '<span class="need-row__spec"> ×' + L.Количество_на_комплект + '</span>'
+        + '</div>'
+        + '<div class="need-row__right">'
+        +   (deficit > 0
+             ? '<span class="need-row__need">нужно: ' + deficit + ' шт</span>'
+               + '<span class="need-row__stock">есть: ' + L.Остаток + '</span>'
+             : '<span class="need-row__ok">✓ есть (' + L.Остаток + ' шт)</span>')
+        + '</div>'
+        + '</div>';
+    });
+
+    html += '</div>';
+    wrap.innerHTML = html;
+  }
+
+  // ------------------------------------------------------------------
   // Конфиг-панель (для первоначальной настройки)
   // ------------------------------------------------------------------
 
@@ -579,6 +697,8 @@ var UI = (function () {
     showError:            showError,
     hideError:            hideError,
     renderConfigPanel:    renderConfigPanel,
+    renderWelcomeScreen:  renderWelcomeScreen,
+    renderWelcomeNeeds:   renderWelcomeNeeds,
     todayFormatted:       todayFormatted,
     plural:               plural
   };
