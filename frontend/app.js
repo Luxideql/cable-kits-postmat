@@ -105,10 +105,9 @@ function _submit() {
   btn.disabled    = true;
   btn.textContent = 'Сохраняю...';
 
-  var tgId       = _getTgId();
   var kitsBefore = _readiness ? (_readiness.Готово_комплектов || 0) : 0;
 
-  API.addProduction(tgId, lenMm, qty, '', kitsBefore, name, date)
+  API.addProduction(lenMm, qty, '', kitsBefore, name, date)
     .then(function (res) {
       btn.disabled    = false;
       btn.textContent = '✓ Сохранить';
@@ -325,14 +324,6 @@ function _populateLengths() {
 // ──────────────────────────────────────────
 // Утилиты
 // ──────────────────────────────────────────
-function _getTgId() {
-  var tg = window.Telegram && window.Telegram.WebApp;
-  if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
-    return String(tg.initDataUnsafe.user.id);
-  }
-  return '';
-}
-
 function _todayISO() {
   var n = new Date();
   return n.getFullYear()

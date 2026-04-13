@@ -86,34 +86,19 @@ function apiGetPriorityList(params) {
 // ------------------------------------------------------------------
 
 function apiAddProductionLog(params) {
-  var tgId       = params.telegram_id || '';
   var lenMm      = params.length_mm;
   var qty        = Number(params.qty || 0);
   var comment    = params.comment    || '';
-  var workerName = params.worker_name || '';  // имя из формы
-  var logDate    = params.log_date   || '';  // дата из формы (YYYY-MM-DD)
+  var workerName = params.worker_name || 'Сотрудник';
+  var logDate    = params.log_date   || '';
 
   if (!lenMm)   return { success: false, error: 'Не указана длина' };
   if (qty <= 0) return { success: false, error: 'Количество должно быть > 0' };
 
-  // Если есть telegram_id — регистрируем сотрудника
-  var emp    = null;
-  var empId  = 0;
-  var empFio = workerName;
-
-  if (tgId) {
-    emp = getEmployeeByTelegramId(tgId);
-    if (!emp) emp = registerEmployee(tgId, workerName || params.fio || null, params.username || null);
-    empId = emp.id;
-    if (!empFio) empFio = emp.fio;
-  }
-
-  if (!empFio) empFio = 'Сотрудник';
-
   var rowId = addProductionRow(
-    empId,
-    empFio,
-    tgId,
+    0,
+    workerName,
+    '',
     lenMm,
     qty,
     comment,
