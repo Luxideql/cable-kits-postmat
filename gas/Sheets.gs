@@ -263,3 +263,44 @@ function getProductionSummaryByDate(date) {
   var rows = getProductionJournal(date, null);
   return aggregateProduction(rows);
 }
+
+// ------------------------------------------------------------------
+// Назначения (распределение по людям)
+// ------------------------------------------------------------------
+
+/**
+ * Возвращает все назначения на дату.
+ */
+function getAssignments(date) {
+  var sheet = getSheet('Назначения');
+  var rows  = sheetToObjects(sheet);
+  return rows.filter(function (r) {
+    return String(r['Дата']).substring(0, 10) === date;
+  });
+}
+
+/**
+ * Создаёт или обновляет назначение (Дата + Длина + Сотрудник → план).
+ */
+function setAssignment(date, lengthMm, fio, planQty) {
+  var sheet   = getSheet('Назначения');
+  var data    = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var colDate = headers.indexOf('Дата');
+  var colLen  = headers.indexOf('Длина_мм');
+  var colFio  = headers.indexOf('Сотрудник_ФИО');
+  var colPlan = headers.indexOf('План_шт');
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][colDate]).substring(0, 10) === date
+        && Number(data[i][colLen]) === Number(lengthMm)
+        && String(data[i][colFio]) === String(fio)) {
+      sheet.getRange(i + 1, colPlan + 1).setValue(Number(planQty));
+      return Number(planQty);
+    }
+  }
+
+  var newId = sheet.getLastRow();
+  sheet.appendRow([newId, date, Number(lengthMm), String(fio), Number(planQty)]);
+  return Number(planQty);
+}

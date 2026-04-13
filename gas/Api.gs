@@ -241,6 +241,43 @@ function apiSetStock(params) {
 }
 
 // ------------------------------------------------------------------
+// getEmployees
+// ------------------------------------------------------------------
+
+function apiGetEmployees(params) {
+  var employees = getAllEmployees();
+  return { success: true, employees: employees };
+}
+
+// ------------------------------------------------------------------
+// getAssignments
+// ------------------------------------------------------------------
+
+function apiGetAssignments(params) {
+  var date = params.date || getMoscowDate();
+  var rows = getAssignments(date);
+  return { success: true, date: date, assignments: rows };
+}
+
+// ------------------------------------------------------------------
+// setAssignment
+// ------------------------------------------------------------------
+
+function apiSetAssignment(params) {
+  var date    = params.date || getMoscowDate();
+  var lenMm   = params.length_mm;
+  var fio     = params.fio;
+  var planQty = Number(params.plan_qty);
+
+  if (!lenMm)        return { success: false, error: 'Не указана длина' };
+  if (!fio)          return { success: false, error: 'Не указан сотрудник' };
+  if (isNaN(planQty) || planQty < 0) return { success: false, error: 'Некорректное количество' };
+
+  setAssignment(date, lenMm, fio, planQty);
+  return { success: true, date: date, length_mm: lenMm, fio: fio, plan_qty: planQty };
+}
+
+// ------------------------------------------------------------------
 // Утилиты
 // ------------------------------------------------------------------
 

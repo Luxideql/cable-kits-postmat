@@ -233,6 +233,32 @@ var API = (function () {
   }
 
   /**
+   * Возвращает список активных сотрудников.
+   */
+  function getEmployees() {
+    return call('getEmployees');
+  }
+
+  /**
+   * Возвращает назначения (план по людям) на дату.
+   */
+  function getAssignments(date) {
+    return call('getAssignments', { date: date || '' });
+  }
+
+  /**
+   * Сохраняет план для сотрудника по позиции на дату.
+   */
+  function setAssignment(date, lengthMm, fio, planQty) {
+    return post('setAssignment', {
+      date:      date,
+      length_mm: lengthMm,
+      fio:       fio,
+      plan_qty:  planQty
+    });
+  }
+
+  /**
    * Изменяет URL сервера (для конфигурации).
    */
   function setGasUrl(url) {
@@ -268,6 +294,9 @@ var API = (function () {
     getManagerDashboard:getManagerDashboard,
     setPlan:            setPlan,
     setStock:           setStock,
+    getEmployees:       getEmployees,
+    getAssignments:     getAssignments,
+    setAssignment:      setAssignment,
     setGasUrl:          setGasUrl,
     getGasUrl:          getGasUrl
   };

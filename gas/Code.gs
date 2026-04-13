@@ -10,7 +10,7 @@
 //   Who has access: Anyone
 // ==========================================
 
-var APP_VERSION = '1.1.0';
+var APP_VERSION = '1.3.0';
 
 // ------------------------------------------------------------------
 // HTTP handlers
@@ -112,6 +112,11 @@ function routeAction(action, params) {
     case 'setPlan':                 return apiSetPlan(params);
     case 'setStock':                return apiSetStock(params);
 
+    // Сотрудники и назначения
+    case 'getEmployees':    return apiGetEmployees(params);
+    case 'getAssignments':  return apiGetAssignments(params);
+    case 'setAssignment':   return apiSetAssignment(params);
+
     // Служебные
     case 'ping':
       return { success: true, message: 'pong', version: APP_VERSION, time: getMoscowDateTime() };
@@ -167,6 +172,9 @@ function initSheets() {
 
   createSheetIfNotExists('Сотрудники',
     ['id', 'Telegram_id', 'ФИО', 'Роль', 'Активен']);
+
+  createSheetIfNotExists('Назначения',
+    ['id', 'Дата', 'Длина_мм', 'Сотрудник_ФИО', 'План_шт']);
 
   fillDefaultSpec();
   Logger.log('✅ Инициализация завершена');
