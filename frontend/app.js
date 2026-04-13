@@ -212,52 +212,57 @@ function _renderPositions() {
 // ── Редактирование остатка ──────────────────────────────────────────
 
 function _editStock(cell, lengthMm) {
+  if (cell.querySelector('input')) return; // уже редактируется
+
   var valEl = cell.querySelector('.stock-val');
-  if (!valEl || cell.querySelector('input')) return; // уже редактируется
+  var cur   = parseInt(valEl ? valEl.textContent : 0, 10) || 0;
 
-  var cur = parseInt(valEl.textContent, 10) || 0;
+  // Заменяем содержимое ячейки: поле + кнопки
+  cell.innerHTML =
+    '<input type="number" min="0" class="stock-input" value="' + cur + '">'
+    + '<div class="stock-btns">'
+    +   '<button class="stock-btn stock-btn--ok">✓</button>'
+    +   '<button class="stock-btn stock-btn--cancel">✕</button>'
+    + '</div>';
 
-  var inp = document.createElement('input');
-  inp.type      = 'number';
-  inp.min       = '0';
-  inp.value     = cur;
-  inp.className = 'stock-input';
+  var inp    = cell.querySelector('input');
+  var btnOk  = cell.querySelector('.stock-btn--ok');
+  var btnCnl = cell.querySelector('.stock-btn--cancel');
 
-  valEl.replaceWith(inp);
   inp.focus();
   inp.select();
+
+  function restore(val) {
+    cell.innerHTML =
+      '<div class="stock-val" id="stock-val-' + lengthMm + '">' + val + '</div>'
+      + '<div class="pos-stock-lbl">остаток ✎</div>';
+    // переподключаем обработчик клика на ячейку
+    cell.addEventListener('click', function handler() {
+      cell.removeEventListener('click', handler);
+      _editStock(cell, lengthMm);
+    });
+  }
 
   function commit() {
     var newQty = parseInt(inp.value, 10);
     if (isNaN(newQty) || newQty < 0) newQty = cur;
-    if (newQty === cur) {
-      // Ничего не изменилось — просто восстанавливаем
-      var restored = document.createElement('div');
-      restored.className = 'pos-metric__val stock-val';
-      restored.id        = 'stock-val-' + lengthMm;
-      restored.textContent = cur;
-      inp.replaceWith(restored);
-      return;
-    }
-    _saveStock(inp, lengthMm, newQty, cur);
+    if (newQty === cur) { restore(cur); return; }
+    _saveStock(cell, lengthMm, newQty, cur);
   }
 
-  inp.addEventListener('blur',    commit);
+  btnOk.addEventListener('click',  function (e) { e.stopPropagation(); commit(); });
+  btnCnl.addEventListener('click', function (e) { e.stopPropagation(); restore(cur); });
   inp.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter')  { inp.blur(); }
-    if (e.key === 'Escape') {
-      var restored = document.createElement('div');
-      restored.className   = 'pos-metric__val stock-val';
-      restored.id          = 'stock-val-' + lengthMm;
-      restored.textContent = cur;
-      inp.removeEventListener('blur', commit);
-      inp.replaceWith(restored);
-    }
+    if (e.key === 'Enter')  commit();
+    if (e.key === 'Escape') restore(cur);
   });
 }
 
-function _saveStock(inp, lengthMm, newQty, oldQty) {
-  inp.disabled = true;
+function _saveStock(cell, lengthMm, newQty, oldQty) {
+  var inp = cell.querySelector('input');
+  if (inp) inp.disabled = true;
+  var btnOk = cell.querySelector('.stock-btn--ok');
+  if (btnOk) { btnOk.disabled = true; btnOk.textContent = '…'; }
 
   API.setStock(lengthMm, newQty)
     .then(function (res) {
@@ -269,9 +274,10 @@ function _saveStock(inp, lengthMm, newQty, oldQty) {
     })
     .catch(function (err) {
       _toast('Ошибка: ' + err.message, 'err');
-      // Восстанавливаем старое значение
-      var valEl = document.getElementById('stock-val-' + lengthMm);
-      if (valEl) valEl.textContent = oldQty;
+      // Восстанавливаем старое значение в ячейке
+      cell.innerHTML =
+        '<div class="stock-val" id="stock-val-' + lengthMm + '">' + oldQty + '</div>'
+        + '<div class="pos-stock-lbl">остаток ✎</div>';
       _haptic('error');
     });
 }

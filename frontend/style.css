@@ -338,6 +338,30 @@ body {
 .stock-input::-webkit-outer-spin-button,
 .stock-input::-webkit-inner-spin-button { -webkit-appearance: none; }
 
+/* Кнопки подтверждения/отмены остатка */
+.stock-btns {
+  display: flex;
+  gap: 4px;
+  margin-top: 5px;
+  justify-content: center;
+}
+
+.stock-btn {
+  flex: 1;
+  padding: 5px 0;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stock-btn--ok     { background: var(--blue);  color: #fff; }
+.stock-btn--cancel { background: var(--border); color: var(--hint); }
+.stock-btn:disabled { opacity: .5; }
+
 /* ── Журнал ── */
 .journal { display: flex; flex-direction: column; gap: 2px; }
 
