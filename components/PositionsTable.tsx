@@ -49,7 +49,7 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
               <TH k="produced"  label="Вироблено"  align="right" />
               <th className="th text-right">
                 <span className="block leading-none">Разом</span>
-                <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">склад + вироб</span>
+                <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">склад + вироблено</span>
               </th>
               <TH k="kits"      label="Комплектів" align="right" />
               <th className="th text-right">

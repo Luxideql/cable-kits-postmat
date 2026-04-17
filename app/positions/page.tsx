@@ -45,7 +45,7 @@ export default async function PositionsPage() {
         {[
           { label: 'Вироблено всього',  value: totalProduced,         sub: 'одиниць' },
           { label: 'Доступно зараз',    value: totalAvailNotShipped,  sub: 'шт · не відвантажено' },
-          { label: 'Мін. комплектів',   value: stats.totalKits,       sub: 'до відвантаження' },
+          { label: 'Мін. комплектів',   value: stats.totalKits,       sub: 'мінімум по позиціях' },
         ].map(({label,value,sub}) => (
           <div key={label} className="card-hover p-3 sm:p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-2">{label}</p>

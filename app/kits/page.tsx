@@ -120,7 +120,7 @@ export default async function KitsPage() {
                 ))}
                 <th className="th text-right">
                   <span className="block leading-none">Разом</span>
-                  <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">склад + вироб</span>
+                  <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">склад + вироблено</span>
                 </th>
                 {['К-сть/компл.','Комплектів'].map(h => (
                   <th key={h} className="th text-right">{h}</th>
