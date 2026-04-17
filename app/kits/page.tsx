@@ -1,5 +1,6 @@
 import { getKitStats, getShipments } from '@/lib/data';
 import InfoTooltip from '@/components/InfoTooltip';
+import ColInfo from '@/components/ColInfo';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,21 +125,36 @@ export default async function KitsPage() {
           <table className="min-w-full">
             <thead>
               <tr style={{ borderBottom:'1px solid var(--cbrd)' }}>
-                {['Позиція','Склад','Вироблено'].map(h => (
-                  <th key={h} className={`th ${h === 'Позиція' ? 'text-left' : 'text-right'}`}>{h}</th>
-                ))}
+                <th className="th text-left">
+                  <span className="inline-flex items-center gap-0.5">Позиція<ColInfo text="Довжина кабелю в мм." /></span>
+                </th>
                 <th className="th text-right">
-                  <span className="block leading-none">Разом</span>
+                  <span className="inline-flex items-center gap-0.5">Склад<ColInfo text="Початковий залишок введений вручну в Google Sheets." /></span>
+                </th>
+                <th className="th text-right">
+                  <span className="inline-flex items-center gap-0.5">Вироблено<ColInfo text="Сума звітів робітників через бот за весь час." /></span>
+                </th>
+                <th className="th text-right">
+                  <span className="inline-flex items-center gap-0.5">
+                    Разом<ColInfo text="Склад + Вироблено = загальна кількість одиниць." />
+                  </span>
                   <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">склад + вироблено</span>
                 </th>
-                {['К-сть/компл.','Комплектів'].map(h => (
-                  <th key={h} className="th text-right">{h}</th>
-                ))}
                 <th className="th text-right">
-                  <span className="block leading-none">Вільних компл.</span>
+                  <span className="inline-flex items-center gap-0.5">К-сть/компл.<ColInfo text="Скільки одиниць цієї позиції входить в 1 комплект." /></span>
+                </th>
+                <th className="th text-right">
+                  <span className="inline-flex items-center gap-0.5">Комплектів<ColInfo text="floor(Разом ÷ К-сть/компл.) — кількість повних комплектів." /></span>
+                </th>
+                <th className="th text-right">
+                  <span className="inline-flex items-center gap-0.5">
+                    Вільних компл.<ColInfo text="Комплектів − відправлено всього. Скільки ще не відвантажено." />
+                  </span>
                   <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">компл. − відправлено</span>
                 </th>
-                <th className="th text-left">Статус</th>
+                <th className="th text-left">
+                  <span className="inline-flex items-center gap-0.5">Статус<ColInfo text="Порівняння з планом: Виконано / В процесі / Відстає. Якщо план не задано — оцінка за абсолютною кількістю." /></span>
+                </th>
               </tr>
             </thead>
             <tbody>

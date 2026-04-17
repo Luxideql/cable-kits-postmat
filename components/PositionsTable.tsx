@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { PositionStats } from '@/lib/types';
+import ColInfo from '@/components/ColInfo';
 
 interface Props { positions: PositionStats[]; shipped?: number }
 type SortKey = 'lengthMm' | 'stock' | 'produced' | 'available' | 'kits' | 'progress';
@@ -27,13 +28,17 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
     else { setSortKey(key); setSortAsc(false); }
   };
 
-  const TH = ({ k, label, align = 'left' }: { k: SortKey; label: string; align?: string }) => (
+  const TH = ({ k, label, align = 'left', info }: { k: SortKey; label: string; align?: string; info?: string }) => (
     <th
       onClick={() => toggleSort(k)}
       className={`th ${align === 'right' ? 'text-right' : 'text-left'}
         ${sortKey === k ? 'text-indigo-500 dark:text-indigo-400' : ''}`}
     >
-      {label}<SortIcon active={sortKey === k} asc={sortAsc} />
+      <span className="inline-flex items-center gap-0.5">
+        {label}
+        <SortIcon active={sortKey === k} asc={sortAsc} />
+        {info && <span onClick={e => e.stopPropagation()}><ColInfo text={info} /></span>}
+      </span>
     </th>
   );
 
@@ -43,26 +48,42 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
         <table className="min-w-full border-separate border-spacing-0">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
-              <TH k="lengthMm"  label="Позиція" />
-              <th className="th text-left">Комірки</th>
-              <TH k="stock"     label="Залишок"    align="right" />
-              <TH k="produced"  label="Вироблено"  align="right" />
+              <th className="th text-left">
+                <span className="inline-flex items-center gap-0.5">
+                  Позиція
+                  <ColInfo text="Довжина кабелю в мм. Кожна позиція — окремий тип кабелю для поштомату." />
+                </span>
+              </th>
+              <th className="th text-left">
+                <span className="inline-flex items-center gap-0.5">
+                  Комірки
+                  <ColInfo text="Номери комірок поштомату, куди вкладається цей кабель." />
+                </span>
+              </th>
+              <TH k="stock"    label="Залишок"   align="right" info="Початковий залишок на складі — введено вручну в Google Sheets." />
+              <TH k="produced" label="Вироблено" align="right" info="Сума всіх звітів робітників через бот за весь час." />
               <th className="th text-right">
-                <span className="block leading-none">Разом</span>
+                <span className="inline-flex items-center gap-0.5">
+                  Разом
+                  <ColInfo text="Залишок + Вироблено = загальна кількість одиниць цієї позиції прямо зараз." />
+                </span>
                 <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">склад + вироблено</span>
               </th>
-              <TH k="kits"      label="Комплектів" align="right" />
+              <TH k="kits" label="Комплектів" align="right" info="floor(Разом ÷ К-сть/компл.) — скільки повних комплектів можна зібрати з цієї позиції." />
               <th className="th text-right">
-                <span className="block leading-none">Вільних компл.</span>
+                <span className="inline-flex items-center gap-0.5">
+                  Вільних компл.
+                  <ColInfo text="Комплектів − відправлено всього. Скільки комплектів цієї позиції ще не відвантажено." />
+                </span>
                 <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">компл. − відправлено</span>
               </th>
-              <TH k="progress"  label="Прогрес" />
+              <TH k="progress" label="Прогрес" info="Виконання плану в %: Разом ÷ (план × к-сть/компл.) × 100." />
             </tr>
           </thead>
           <tbody>
             {sorted.map((p, idx) => {
               const isBottleneck = p.kits === minKits && p.kits >= 0;
-                  const readyNow = Math.max(0, p.kits - shipped);
+              const readyNow = Math.max(0, p.kits - shipped);
               const isLast = idx === sorted.length - 1;
               return (
                 <tr
@@ -72,7 +93,6 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                   onMouseEnter={e => (e.currentTarget.style.backgroundColor = isBottleneck ? 'rgba(239,68,68,0.06)' : 'var(--chov)')}
                   onMouseLeave={e => (e.currentTarget.style.backgroundColor = isBottleneck ? 'rgba(239,68,68,0.04)' : '')}
                 >
-                  {/* Position */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       <div className={`w-1.5 h-1.5 rounded-full shrink-0
@@ -81,38 +101,24 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                       {isBottleneck && <span className="badge-red ml-0.5">вузьке</span>}
                     </div>
                   </td>
-
-                  {/* Cells */}
                   <td className="px-4 py-3 text-[13px] font-mono text-c4">{p.cellNumbers || '—'}</td>
-
-                  {/* Stock */}
                   <td className="px-4 py-3 text-right text-[14px] text-c3">{p.stock}</td>
-
-                  {/* Produced */}
                   <td className="px-4 py-3 text-right">
                     <span className="text-[14px] font-medium text-emerald-600 dark:text-emerald-400">{p.produced}</span>
                   </td>
-
-                  {/* Total (stock + produced) */}
                   <td className="px-4 py-3 text-right text-[14px] font-semibold text-c2">{p.available}</td>
-
-                  {/* Kits */}
                   <td className="px-4 py-3 text-right">
                     <span className={`text-[15px] font-bold tabular-nums
                       ${isBottleneck ? 'text-red-600 dark:text-red-400' : 'text-c1'}`}>
                       {p.kits}
                     </span>
                   </td>
-
-                  {/* Ready now (kits − shipped) */}
                   <td className="px-4 py-3 text-right">
                     <span className={`text-[15px] font-bold tabular-nums
                       ${readyNow === 0 ? 'text-c4' : 'text-emerald-600 dark:text-emerald-400'}`}>
                       {readyNow}
                     </span>
                   </td>
-
-                  {/* Progress */}
                   <td className="px-4 py-3 min-w-[140px]">
                     <div className="flex items-center gap-3">
                       <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--cbrd)' }}>
@@ -124,7 +130,7 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                           style={{ width: `${Math.max(p.progress, 2)}%` }}
                         />
                       </div>
-                      <span className={`text-[12px] tabular-nums w-8 text-right shrink-0 font-medium text-c4`}>
+                      <span className="text-[12px] tabular-nums w-8 text-right shrink-0 font-medium text-c4">
                         {p.progress}%
                       </span>
                     </div>
@@ -134,7 +140,6 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
             })}
           </tbody>
         </table>
-
         {sorted.length === 0 && (
           <div className="py-16 text-center">
             <p className="text-[12px] text-c4">Позицій не знайдено</p>
