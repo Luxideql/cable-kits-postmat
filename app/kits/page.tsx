@@ -126,7 +126,7 @@ export default async function KitsPage() {
                   <th key={h} className="th text-right">{h}</th>
                 ))}
                 <th className="th text-right">
-                  <span className="block leading-none">Доступно зараз</span>
+                  <span className="block leading-none">Вільних компл.</span>
                   <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">компл. − відправлено</span>
                 </th>
                 <th className="th text-left">Статус</th>

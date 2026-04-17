@@ -44,7 +44,7 @@ export default async function PositionsPage() {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Вироблено всього',  value: totalProduced,         sub: 'одиниць' },
-          { label: 'Доступно зараз',    value: totalAvailNotShipped,  sub: 'шт · не відвантажено' },
+          { label: 'Залишок в шт',       value: totalAvailNotShipped,  sub: 'шт · не відвантажено' },
           { label: 'Мін. комплектів',   value: stats.totalKits,       sub: 'мінімум по позиціях' },
         ].map(({label,value,sub}) => (
           <div key={label} className="card-hover p-3 sm:p-4">
