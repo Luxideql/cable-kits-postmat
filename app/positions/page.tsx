@@ -1,4 +1,5 @@
 import PositionsTable from '@/components/PositionsTable';
+import InfoTooltip from '@/components/InfoTooltip';
 import { getKitStats, getShipments } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,14 @@ export default async function PositionsPage() {
         <div className="flex items-center gap-2">
           {stats.bottleneck && <span className="badge-red">Вузьке: {stats.bottleneck.lengthMm} мм</span>}
           <span className="badge-slate">{stats.positions.length} позицій</span>
+          <InfoTooltip>
+            <p><b>Залишок на складі</b> — початкові шт введені вручну в таблицю.</p>
+            <p><b>Вироблено</b> — сума всіх звітів робітників через бот.</p>
+            <p><b>Разом в шт</b> = Залишок + Вироблено.</p>
+            <p><b>Залишок в шт</b> = Разом − (відправлено × к-сть на компл.) — скільки шт ще не пішло у відправлені комплекти.</p>
+            <p><b>Мін. комплектів</b> — мінімум по всіх позиціях (обмежено вузьким місцем).</p>
+            <p className="pt-1" style={{borderTop:'1px solid var(--cbrd)'}}><b>Таблиця:</b> Залишок + Вироблено = Разом → ÷ к-сть/компл. = Комплектів → − відправлено = Вільних компл.</p>
+          </InfoTooltip>
         </div>
       </div>
 

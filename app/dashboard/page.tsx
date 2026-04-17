@@ -1,5 +1,6 @@
 import StatsCard from '@/components/StatsCard';
 import PositionsTable from '@/components/PositionsTable';
+import InfoTooltip from '@/components/InfoTooltip';
 import { getKitStats, getDailyReports, getShipments } from '@/lib/data';
 import { getTodayDate, formatDate } from '@/lib/calculations';
 import type { ReactNode } from 'react';
@@ -118,9 +119,17 @@ export default async function DashboardPage() {
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Огляд</p>
           <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Дашборд</h1>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           <span className="text-[12px] text-c4 font-medium">Live дані</span>
+          <InfoTooltip>
+            <p><b>Готових комплектів</b> — мінімум по всіх позиціях прямо зараз.</p>
+            <p><b>Вироблено сьогодні</b> — сума звітів за поточний день.</p>
+            <p><b>Вузьке місце</b> — позиція що обмежує кількість комплектів.</p>
+            <p><b>Відправлено</b> — загальна кількість відвантажених комплектів за весь час.</p>
+            <p><b>Готово до відправки</b> = Готових комплектів − Відправлено.</p>
+            <p><b>Графік</b> — кількість вироблених одиниць по днях за останній тиждень.</p>
+          </InfoTooltip>
         </div>
       </div>
 

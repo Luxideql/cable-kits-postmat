@@ -1,4 +1,5 @@
 import { getKitStats, getShipments } from '@/lib/data';
+import InfoTooltip from '@/components/InfoTooltip';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,7 +63,15 @@ export default async function KitsPage() {
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Склад</p>
           <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Комплекти</h1>
         </div>
-        {bn && <span className="badge-red">Вузьке: {bn.lengthMm} мм</span>}
+        <div className="flex items-center gap-2">
+          {bn && <span className="badge-red">Вузьке: {bn.lengthMm} мм</span>}
+          <InfoTooltip>
+            <p><b>Готових комплектів</b> — скільки повних комплектів можна зібрати зараз. Рахується як мінімум по всіх позиціях: floor(Разом ÷ к-сть/компл.).</p>
+            <p><b>Вузьке місце</b> — позиція з найменшою кількістю комплектів. Саме вона обмежує загальний результат.</p>
+            <p><b>Недостача до плану</b> = план − готових комплектів.</p>
+            <p className="pt-1" style={{borderTop:'1px solid var(--cbrd)'}}><b>Таблиця — Вільних компл.</b> = Комплектів − відправлено. Скільки комплектів цієї позиції ще не відвантажено.</p>
+          </InfoTooltip>
+        </div>
       </div>
 
       {/* Top KPI */}
