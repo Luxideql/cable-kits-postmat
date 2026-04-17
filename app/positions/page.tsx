@@ -21,9 +21,10 @@ export default async function PositionsPage() {
   );
   if (!stats) return null;
 
-  const totalProduced = stats.positions.reduce((s,p) => s + p.produced, 0);
-  // Доступно зараз в шт = сума по позиціях (available - shipped_kits * qtyPerPostomat), мін 0
-  const totalAvailNotShipped = stats.positions.reduce((s, p) => {
+  const totalStock            = stats.positions.reduce((s,p) => s + p.stock, 0);
+  const totalProduced         = stats.positions.reduce((s,p) => s + p.produced, 0);
+  const totalAvailable        = stats.positions.reduce((s,p) => s + p.available, 0);
+  const totalAvailNotShipped  = stats.positions.reduce((s, p) => {
     return s + Math.max(0, p.available - shipped * p.qtyPerPostomat);
   }, 0);
 
@@ -41,10 +42,12 @@ export default async function PositionsPage() {
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Вироблено всього',  value: totalProduced,         sub: 'одиниць' },
-          { label: 'Залишок в шт',       value: totalAvailNotShipped,  sub: 'шт · не відвантажено' },
+          { label: 'Залишок на складі', value: totalStock,            sub: 'шт · початковий склад' },
+          { label: 'Вироблено',         value: totalProduced,         sub: 'шт · виробництво' },
+          { label: 'Разом в шт',        value: totalAvailable,        sub: 'склад + вироблено' },
+          { label: 'Залишок в шт',      value: totalAvailNotShipped,  sub: 'шт · не відвантажено' },
           { label: 'Мін. комплектів',   value: stats.totalKits,       sub: 'мінімум по позиціях' },
         ].map(({label,value,sub}) => (
           <div key={label} className="card-hover p-3 sm:p-4">
