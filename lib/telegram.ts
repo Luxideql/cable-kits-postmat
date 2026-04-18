@@ -37,7 +37,7 @@ export function mainMenuKeyboard() {
       ['📋 Позиції', '📦 Залишки'],
       ['🧮 Комплекти', '🎯 План'],
       ['🚚 Відвантаження', '📈 Статистика'],
-      ['🔗 Таблиця'],
+      ['🔗 Таблиця', { text: '🖥 Дашборд', web_app: { url: 'https://cable-crm.vercel.app/dashboard' } }],
     ],
     resize_keyboard: true,
   };
