@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ══════════════════════════════════════════════════════
+   COLOR TOKENS  (auto-switch via .dark on <html>)
+══════════════════════════════════════════════════════ */
+
+:root {
+  /* Light theme */
+  --c1:   #0F172A;     /* primary text   */
+  --c2:   #334155;     /* secondary text */
+  --c3:   #64748B;     /* muted text     */
+  --c4:   #94A3B8;     /* dim text       */
+  --cbg:  #F1F5F9;     /* page bg        */
+  --csr:  #FFFFFF;     /* card surface   */
+  --csr2: #F8FAFC;     /* elevated       */
+  --cbrd: #E2E8F0;     /* border         */
+  --csdb: #FFFFFF;     /* sidebar bg     */
+  --csdb-brd: #E2E8F0; /* sidebar border */
+  --chov: rgba(0,0,0,0.04);   /* hover bg  */
+  --chov2: rgba(0,0,0,0.06);  /* hover bg2 */
+  color-scheme: light;
+}
+
+.dark {
+  --c1:   #E2E8F0;
+  --c2:   #CBD5E1;
+  --c3:   #94A3B8;
+  --c4:   #475569;
+  --cbg:  #0B0F1A;
+  --csr:  #111827;
+  --csr2: #1E293B;
+  --cbrd: #1F2937;
+  --csdb: #080D18;
+  --csdb-brd: #111827;
+  --chov: rgba(255,255,255,0.04);
+  --chov2: rgba(255,255,255,0.07);
+  color-scheme: dark;
+}
+
+/* ══════════════════════════════════════════════════════
+   BASE
+══════════════════════════════════════════════════════ */
+
+@layer base {
+  html { @apply scroll-smooth; }
+
+  body {
+    background-color: var(--cbg);
+    color: var(--c1);
+    @apply antialiased font-sans;
+    font-feature-settings: "cv11","ss01";
+  }
+
+  * { scrollbar-width: thin; scrollbar-color: var(--cbrd) transparent; }
+  *::-webkit-scrollbar { width: 4px; height: 4px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: var(--cbrd); border-radius: 999px; }
+
+  ::selection { @apply bg-indigo-500/30 text-white; }
+}
+
+/* ══════════════════════════════════════════════════════
+   COMPONENTS
+══════════════════════════════════════════════════════ */
+
+@layer components {
+
+  /* ── Cards ── */
+  .card {
+    @apply rounded-2xl;
+    background-color: var(--csr);
+    border: 1px solid var(--cbrd);
+  }
+  .card-hover {
+    @apply card transition-all duration-200;
+  }
+  .card-hover:hover {
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+  .dark .card-hover:hover {
+    box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  }
+
+  /* ── Buttons ── */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 h-8 px-3.5
+           text-white text-xs font-semibold rounded-xl
+           transition-all duration-150 active:scale-95
+           bg-indigo-500 hover:bg-indigo-400
+           shadow-[0_0_16px_rgba(99,102,241,0.25)]
+           hover:shadow-[0_0_22px_rgba(99,102,241,0.4)];
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 h-8 px-3
+           text-xs font-medium rounded-xl
+           transition-all duration-150;
+    color: var(--c3);
+    border: 1px solid transparent;
+  }
+  .btn-ghost:hover {
+    color: var(--c1);
+    background-color: var(--chov);
+    border-color: var(--cbrd);
+  }
+
+  /* ── Badges ── */
+  .badge        { @apply inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-md tracking-wide; }
+  .badge-green  { @apply badge bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/20; }
+  .badge-yellow { @apply badge bg-amber-500/10   text-amber-600   dark:text-amber-400   ring-1 ring-inset ring-amber-500/20; }
+  .badge-red    { @apply badge bg-red-500/10     text-red-600     dark:text-red-400     ring-1 ring-inset ring-red-500/20; }
+  .badge-indigo { @apply badge bg-indigo-500/10  text-indigo-600  dark:text-indigo-400  ring-1 ring-inset ring-indigo-500/20; }
+  .badge-slate  { @apply badge ring-1 ring-inset ring-[var(--cbrd)]; color: var(--c3); background-color: var(--csr2); }
+
+  /* ── Table cells ── */
+  .th {
+    @apply px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em]
+           select-none cursor-pointer transition-colors whitespace-nowrap;
+    color: var(--c4);
+  }
+  .th:hover { color: var(--c3); }
+}
+
+/* ══════════════════════════════════════════════════════
+   UTILITIES
+══════════════════════════════════════════════════════ */
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent;
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--csr) 0%, var(--csr2) 50%, var(--csr) 100%);
+    background-size: 400px 100%;
+    animation: shimmer 2s infinite linear;
+    @apply rounded-lg;
+  }
+
+  /* Subtle dot grid — lighter in light mode */
+  .dot-grid {
+    background-image: radial-gradient(circle, var(--cbrd) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Hover helpers used in sidebar / nav items */
+  .hover-surface:hover { background-color: var(--chov); }
+  .hover-surface-2:hover { background-color: var(--chov2); }
+
+  /* Table row hover — CSS-only (no JS event handlers needed in server components) */
+  .row-hover { transition: background-color 100ms; }
+  .row-hover:hover { background-color: var(--chov); }
+  .row-hover-red { background-color: rgba(239,68,68,0.04); transition: background-color 100ms; }
+  .row-hover-red:hover { background-color: rgba(239,68,68,0.06); }
+
+  /* Bar chart day hover */
+  .bar-day { background-color: var(--cbrd); transition: background-color 200ms; }
+  .bar-day:hover { background-color: var(--c4); }
+}
