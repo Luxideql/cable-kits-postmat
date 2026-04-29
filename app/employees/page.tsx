@@ -1,6 +1,6 @@
 import { getEmployees, getDailyReports } from '@/lib/data';
 import { getTodayDate } from '@/lib/calculations';
-import type { EmployeeStats } from '@/lib/types';
+import type { EmployeeStats, DailyReport } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,18 +17,41 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
+function AvatarSm({ name }: { name: string }) {
+  const safe     = name || '?';
+  const initials = safe.split(' ').map(n=>n[0]||'').filter(Boolean).slice(0,2).join('').toUpperCase() || '?';
+  const color    = COLORS[safe.charCodeAt(0) % COLORS.length];
+  return (
+    <div className={`w-6 h-6 rounded-full bg-gradient-to-br ${color} flex items-center justify-center text-[10px] font-bold text-white shrink-0`}>
+      {initials}
+    </div>
+  );
+}
+
 function ActivityBadge({ today, week }: { today: number; week: number }) {
   if (today > 0) return <span className="badge-green">Активний</span>;
   if (week  > 0) return <span className="badge-yellow">Цього тижня</span>;
   return <span className="badge-slate">Не активний</span>;
 }
 
+function fmtDate(iso: string) {
+  const [,m,d] = iso.split('-');
+  return `${d}.${m}`;
+}
+
+function fmtWeekday(iso: string) {
+  const days = ['нд','пн','вт','ср','чт','пт','сб'];
+  return days[new Date(iso).getDay()];
+}
+
 export default async function EmployeesPage() {
   let stats: EmployeeStats[] = [];
+  let reports: DailyReport[] = [];
   let error = '';
 
   try {
-    const [employees, reports] = await Promise.all([getEmployees(), getDailyReports()]);
+    const [employees, allReports] = await Promise.all([getEmployees(), getDailyReports()]);
+    reports = allReports;
     const today   = getTodayDate();
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
     stats = employees.map(emp => {
@@ -49,6 +72,32 @@ export default async function EmployeesPage() {
   const activeToday = stats.filter(e=>e.todayQty>0).length;
   const topWorker   = stats.length > 0 ? stats[0] : null;
 
+  // ── Per-day matrix (last 14 days) ─────────────────────────────────────────────
+  const days: string[] = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  const today = getTodayDate();
+
+  // matrix[employeeId][date] = qty
+  const matrix: Record<string, Record<string, number>> = {};
+  for (const emp of stats) {
+    matrix[emp.id] = {};
+    for (const day of days) matrix[emp.id][day] = 0;
+  }
+  for (const rep of reports) {
+    if (matrix[rep.employeeId] && rep.date in matrix[rep.employeeId]) {
+      matrix[rep.employeeId][rep.date] += rep.qty;
+    }
+  }
+
+  // max per day for intensity scaling
+  const dayMax: Record<string, number> = {};
+  for (const day of days) {
+    dayMax[day] = Math.max(1, ...stats.map(e => matrix[e.id]?.[day] ?? 0));
+  }
+
   return (
     <div className="space-y-5 animate-fade-up">
       <div className="flex items-end justify-between">
@@ -59,7 +108,7 @@ export default async function EmployeesPage() {
         <span className="badge-slate">{stats.length} зареєстровано</span>
       </div>
 
-      {/* Summary */}
+      {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3">
         <div className="card-hover p-3 sm:p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-2">Активних сьогодні</p>
@@ -80,7 +129,7 @@ export default async function EmployeesPage() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Summary table */}
       <div className="card overflow-hidden">
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom:'1px solid var(--cbrd)' }}>
           <h2 className="text-[15px] font-semibold text-c1">Список працівників</h2>
@@ -125,6 +174,121 @@ export default async function EmployeesPage() {
                   </tr>
                 ))
               }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Per-day matrix */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom:'1px solid var(--cbrd)' }}>
+          <div>
+            <h2 className="text-[15px] font-semibold text-c1">Виробіток по днях</h2>
+            <p className="text-[12px] text-c4 mt-0.5">Останні 14 днів · одиниць на день</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-separate border-spacing-0">
+            <thead>
+              <tr style={{ borderBottom:'1px solid var(--cbrd)' }}>
+                {/* Sticky worker column */}
+                <th className="th text-left sticky left-0 z-10 min-w-[140px] pr-4"
+                    style={{ backgroundColor:'var(--csr)' }}>
+                  Працівник
+                </th>
+                {days.map(day => (
+                  <th key={day}
+                      className={`th text-center px-2 min-w-[52px] ${day === today ? 'text-indigo-500 dark:text-indigo-400' : ''}`}>
+                    <span className="block">{fmtDate(day)}</span>
+                    <span className={`block text-[9px] font-normal mt-0.5 normal-case tracking-normal
+                      ${day === today ? 'text-indigo-400' : 'text-c4'}`}>
+                      {fmtWeekday(day)}
+                    </span>
+                  </th>
+                ))}
+                <th className="th text-right px-4 min-w-[64px]">Всього</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.length === 0
+                ? <tr><td colSpan={days.length + 2} className="px-5 py-12 text-center"><p className="text-[13px] text-c4">Немає даних</p></td></tr>
+                : stats.map((emp, i) => {
+                  const isLast = i === stats.length - 1;
+                  const rowTotal = days.reduce((s, d) => s + (matrix[emp.id]?.[d] ?? 0), 0);
+                  return (
+                    <tr key={emp.id}
+                        className="row-hover"
+                        style={!isLast ? { borderBottom:'1px solid var(--cbrd)' } : {}}>
+                      {/* Sticky worker name */}
+                      <td className="px-4 py-2.5 sticky left-0 z-10"
+                          style={{ backgroundColor:'var(--csr)' }}>
+                        <div className="flex items-center gap-2">
+                          <AvatarSm name={emp.fullName} />
+                          <span className="text-[13px] font-medium text-c2 truncate max-w-[90px]">
+                            {emp.fullName.split(' ')[0]}
+                          </span>
+                        </div>
+                      </td>
+                      {days.map(day => {
+                        const qty = matrix[emp.id]?.[day] ?? 0;
+                        const intensity = qty > 0 ? Math.max(0.15, qty / dayMax[day]) : 0;
+                        const isToday = day === today;
+                        return (
+                          <td key={day} className="px-1 py-2.5 text-center">
+                            {qty > 0 ? (
+                              <span
+                                className={`inline-flex items-center justify-center w-9 h-7 rounded-lg text-[12px] font-semibold tabular-nums
+                                  ${isToday ? 'text-indigo-700 dark:text-indigo-200' : 'text-emerald-700 dark:text-emerald-200'}`}
+                                style={{
+                                  backgroundColor: isToday
+                                    ? `rgba(99,102,241,${intensity * 0.25})`
+                                    : `rgba(16,185,129,${intensity * 0.25})`,
+                                }}
+                              >
+                                {qty}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center justify-center w-9 h-7 text-[11px] text-c4">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="px-4 py-2.5 text-right">
+                        <span className="text-[14px] font-semibold tabular-nums text-c1">
+                          {rowTotal > 0 ? rowTotal : <span className="text-c4 font-normal">—</span>}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              }
+              {/* Day totals row */}
+              {stats.length > 0 && (
+                <tr style={{ borderTop:'1px solid var(--cbrd)' }}>
+                  <td className="px-4 py-2.5 sticky left-0 z-10 text-[11px] font-bold uppercase tracking-wide text-c4"
+                      style={{ backgroundColor:'var(--csr2)' }}>
+                    Разом
+                  </td>
+                  {days.map(day => {
+                    const dayTotal = stats.reduce((s, e) => s + (matrix[e.id]?.[day] ?? 0), 0);
+                    return (
+                      <td key={day} className="px-1 py-2.5 text-center"
+                          style={{ backgroundColor:'var(--csr2)' }}>
+                        {dayTotal > 0
+                          ? <span className="text-[12px] font-bold tabular-nums text-c2">{dayTotal}</span>
+                          : <span className="text-[11px] text-c4">—</span>
+                        }
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-2.5 text-right"
+                      style={{ backgroundColor:'var(--csr2)' }}>
+                    <span className="text-[14px] font-bold tabular-nums text-c1">
+                      {stats.reduce((s,e) => s + days.reduce((ds,d) => ds + (matrix[e.id]?.[d] ?? 0), 0), 0)}
+                    </span>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
