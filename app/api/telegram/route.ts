@@ -48,8 +48,8 @@ async function handleMessage(msg: Update) {
     const firstName = (msg.from?.first_name ?? '').trim();
     const lastName  = (msg.from?.last_name  ?? '').trim();
     const fullName  = [firstName, lastName].filter(Boolean).join(' ') || `Користувач ${tgId}`;
-    const { id } = await addEmployee({ fullName, telegramId: tgId, position: 'Монтажник', active: true });
-    employee = { id, fullName, telegramId: tgId, position: 'Монтажник', active: true };
+    const { id } = await addEmployee({ fullName, telegramId: tgId, position: 'Монтажник', active: true, notify: true });
+    employee = { id, fullName, telegramId: tgId, position: 'Монтажник', active: true, notify: true };
   }
 
   if (botState?.state === 'await_qty' && text && !isNaN(Number(text))) {

@@ -4,6 +4,7 @@ export interface Employee {
   telegramId: string;
   position: string;
   active: boolean;
+  notify: boolean;
 }
 
 export interface Position {

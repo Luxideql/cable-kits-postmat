@@ -21,12 +21,21 @@ function parseEmployee(e: Record<string, string>): Employee {
     telegramId: e.telegram_id,
     position: e.посада,
     active: e.активний !== 'false',
+    notify: e.сповіщення !== 'false',
   };
 }
 
 export async function getEmployees(): Promise<Employee[]> {
-  const rows = await sheetGet('Працівники!A:E');
+  const rows = await sheetGet('Працівники!A:F');
   return rowsToObjects(rows).filter(e => e.активний !== 'false').map(parseEmployee);
+}
+
+export async function setEmployeeNotify(empId: string, notify: boolean): Promise<void> {
+  const rows = await sheetGet('Працівники!A:F');
+  const idx = rows.findIndex((r, i) => i > 0 && r[0] === empId);
+  if (idx > 0) {
+    await sheetUpdate(`Працівники!F${idx + 1}`, [[String(notify)]]);
+  }
 }
 
 export async function getEmployeeByTelegramId(tgId: string): Promise<Employee | null> {

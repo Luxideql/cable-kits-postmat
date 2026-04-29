@@ -36,6 +36,7 @@ export async function POST(req: Request) {
       telegramId: body.telegramId ?? '',
       position: body.position ?? '',
       active: true,
+      notify: true,
     });
     return NextResponse.json({ success: true, employee: emp });
   } catch (e: unknown) {

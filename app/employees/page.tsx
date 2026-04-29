@@ -1,6 +1,7 @@
 import { getEmployees, getDailyReports } from '@/lib/data';
 import { getTodayDate } from '@/lib/calculations';
 import type { EmployeeStats, DailyReport } from '@/lib/types';
+import NotifyToggle from '@/components/NotifyToggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -139,14 +140,14 @@ export default async function EmployeesPage() {
           <table className="min-w-full">
             <thead>
               <tr style={{ borderBottom:'1px solid var(--cbrd)' }}>
-                {['Працівник','Посада','Сьогодні','Тиждень','Всього','Статус'].map(h => (
+                {['Працівник','Посада','Сьогодні','Тиждень','Всього','Статус','Сповіщення'].map(h => (
                   <th key={h} className={`th ${['Сьогодні','Тиждень','Всього'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {stats.length === 0
-                ? <tr><td colSpan={6} className="px-5 py-12 text-center"><p className="text-[13px] text-c4">Немає працівників</p></td></tr>
+                ? <tr><td colSpan={7} className="px-5 py-12 text-center"><p className="text-[13px] text-c4">Немає працівників</p></td></tr>
                 : stats.map((e, i) => (
                   <tr key={e.id}
                       className="row-hover"
@@ -171,6 +172,9 @@ export default async function EmployeesPage() {
                     </td>
                     <td className="px-5 py-3 text-right text-[13px] text-c3 tabular-nums">{e.totalQty}</td>
                     <td className="px-5 py-3"><ActivityBadge today={e.todayQty} week={e.weekQty}/></td>
+                    <td className="px-5 py-3">
+                      <NotifyToggle empId={e.id} initial={e.notify} />
+                    </td>
                   </tr>
                 ))
               }
