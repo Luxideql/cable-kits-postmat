@@ -20,34 +20,72 @@ const Ic = {
 
 // ── SVG bar chart (server-renderable) ─────────────────────────────────────────
 function BarChart({ data }: { data: { label: string; value: number; isToday?: boolean }[] }) {
-  const max  = Math.max(...data.map(d => d.value), 1);
-  const W = 560, H = 100, BAR_W = 36, GAP = (W - data.length * BAR_W) / (data.length + 1);
+  const max   = Math.max(...data.map(d => d.value), 1);
+  const W     = 560;
+  const H     = 160;
+  const PX    = 8;
+  const n     = data.length;
+  const SLOT  = (W - PX * 2) / n;
+  const BAR_W = Math.floor(SLOT * 0.62);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H + 28}`} className="w-full" style={{ height: '132px' }}>
+    <svg viewBox={`0 0 ${W} ${H + 34}`} className="w-full" style={{ height: '200px' }}>
       <defs>
         <linearGradient id="bG" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.8"/>
-          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.3"/>
+          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.85"/>
+          <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.35"/>
         </linearGradient>
         <linearGradient id="bGT" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#818cf8" stopOpacity="1"/>
-          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.6"/>
+          <stop offset="0%" stopColor="#a5b4fc" stopOpacity="1"/>
+          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.65"/>
         </linearGradient>
       </defs>
-      {[0.25,0.5,0.75,1].map(f => (
-        <line key={f} x1="0" y1={H*(1-f)} x2={W} y2={H*(1-f)} stroke="rgba(100,116,139,0.15)" strokeWidth="1"/>
+
+      {/* Grid lines */}
+      {[0.25, 0.5, 0.75, 1].map(f => (
+        <line key={f}
+          x1={PX} y1={Math.round(H * (1 - f))}
+          x2={W - PX} y2={Math.round(H * (1 - f))}
+          stroke="rgba(100,116,139,0.1)" strokeWidth="1" strokeDasharray="3 3"
+        />
       ))}
+
       {data.map((d, i) => {
-        const x = GAP + i * (BAR_W + GAP);
-        const barH = Math.max((d.value / max) * H, d.value > 0 ? 4 : 2);
-        const y = H - barH;
-        const fill = d.isToday ? 'url(#bGT)' : 'url(#bG)';
+        const slotX = PX + i * SLOT;
+        const x     = slotX + (SLOT - BAR_W) / 2;
+        const barH  = Math.max((d.value / max) * H, d.value > 0 ? 6 : 0);
+        const y     = H - barH;
+        const fill  = d.isToday ? 'url(#bGT)' : 'url(#bG)';
+
         return (
           <g key={i}>
-            <rect x={x} y={y} width={BAR_W} height={barH} fill={fill} rx="4" opacity={d.value === 0 ? 0.3 : 1}/>
-            {d.value > 0 && <text x={x+BAR_W/2} y={y-5} textAnchor="middle" fontSize="10" fill={d.isToday ? '#818cf8' : 'rgba(148,163,184,0.8)'}>{d.value}</text>}
-            <text x={x+BAR_W/2} y={H+18} textAnchor="middle" fontSize="11" fill={d.isToday ? '#818cf8' : 'rgba(100,116,139,0.7)'}>{d.label}</text>
+            {/* Background track */}
+            <rect x={x} y={0} width={BAR_W} height={H}
+                  fill={d.isToday ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.03)'}
+                  rx="8"/>
+            {/* Bar */}
+            {barH > 0 && (
+              <rect x={x} y={y} width={BAR_W} height={barH}
+                    fill={fill} rx="8" opacity={d.value === 0 ? 0.2 : 1}/>
+            )}
+            {/* Value */}
+            {d.value > 0 && (
+              <text x={x + BAR_W / 2} y={y - 7} textAnchor="middle"
+                    fontSize="11" fontWeight="600"
+                    fill={d.isToday ? '#818cf8' : 'rgba(99,102,241,0.75)'}>
+                {d.value}
+              </text>
+            )}
+            {/* Date */}
+            <text x={x + BAR_W / 2} y={H + 22} textAnchor="middle"
+                  fontSize="11" fontWeight={d.isToday ? '700' : '400'}
+                  fill={d.isToday ? '#818cf8' : 'rgba(100,116,139,0.65)'}>
+              {d.label}
+            </text>
+            {/* Today dot */}
+            {d.isToday && (
+              <circle cx={x + BAR_W / 2} cy={H + 32} r="2.5" fill="#818cf8"/>
+            )}
           </g>
         );
       })}
