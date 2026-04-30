@@ -5,11 +5,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function ForecastPage() {
   let error = '';
-  let totalRemaining = 0;
   let kitsRemaining = 0;
   let kitPlan = 0;
   let initialWorkers = 0;
   let initialDailyPlan = 0;
+  let positions: { qtyPerPostomat: number; available: number }[] = [];
 
   try {
     const [kitStats, employees, dailyPlan] = await Promise.all([
@@ -19,15 +19,13 @@ export default async function ForecastPage() {
     ]);
 
     const posRows = kitStats.positions.filter(p => p.planQty > 0);
-    totalRemaining = posRows.reduce((s, p) => {
-      const totalPlanUnits = p.planQty * p.qtyPerPostomat;
-      return s + Math.max(0, totalPlanUnits - p.available);
-    }, 0);
-
     kitPlan = posRows[0]?.planQty ?? 0;
     kitsRemaining = Math.max(0, kitPlan - kitStats.totalKits);
     initialWorkers = employees.filter(e => e.active && e.notify).length;
     initialDailyPlan = dailyPlan;
+    positions = kitStats.positions
+      .filter(p => p.qtyPerPostomat > 0)
+      .map(p => ({ qtyPerPostomat: p.qtyPerPostomat, available: p.available }));
   } catch (e: unknown) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -50,7 +48,7 @@ export default async function ForecastPage() {
       </div>
 
       <ForecastCalculator
-        totalRemaining={totalRemaining}
+        positions={positions}
         kitsRemaining={kitsRemaining}
         kitPlan={kitPlan}
         defaultWorkers={initialWorkers || 1}

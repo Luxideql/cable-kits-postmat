@@ -233,13 +233,13 @@ function ProductionCalendar({ today, completionDate, skipSat, skipSun, dailyQty 
 // ── Main component ──────────────────────────────────────────────────────────
 
 export default function ForecastCalculator({
-  totalRemaining,
-  kitsRemaining,
-  kitPlan,
+  positions = [],
+  kitsRemaining = 0,
+  kitPlan = 0,
   defaultWorkers = 1,
   defaultPerWorker = 0,
 }: {
-  totalRemaining: number;
+  positions?: { qtyPerPostomat: number; available: number }[];
   kitsRemaining?: number;
   kitPlan?: number;
   defaultWorkers?: number;
@@ -249,9 +249,15 @@ export default function ForecastCalculator({
   const [perWorker, setPerWorker] = useState(defaultPerWorker);
   const [skipSat, setSkipSat]     = useState(false);
   const [skipSun, setSkipSun]     = useState(false);
+  const [kits, setKits]           = useState(kitPlan || kitsRemaining || 0);
+
+  const remaining = positions.length > 0
+    ? positions.reduce((s, p) => s + Math.max(0, kits * p.qtyPerPostomat - p.available), 0)
+    : 0;
 
   const totalDaily     = workers * perWorker;
-  const workDaysNeeded = totalDaily > 0 ? Math.ceil(totalRemaining / totalDaily) : null;
+  const workDaysNeeded = totalDaily > 0 && remaining > 0 ? Math.ceil(remaining / totalDaily)
+                       : totalDaily > 0 && remaining === 0 ? 0 : null;
   const completion     = workDaysNeeded !== null ? calcCompletion(workDaysNeeded, skipSat, skipSun) : null;
   const today          = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
 
@@ -270,6 +276,10 @@ export default function ForecastCalculator({
 
       {/* Inputs */}
       <div className="flex flex-wrap gap-6 items-end">
+        <div>
+          <p className="text-[11px] text-c4 mb-2">Поштоматів (план)</p>
+          <Stepper value={kits} onChange={setKits} step={10} min={0} />
+        </div>
         <div>
           <p className="text-[11px] text-c4 mb-2">Кількість людей</p>
           <Stepper value={workers} onChange={setWorkers} step={1} min={1} />
@@ -307,25 +317,15 @@ export default function ForecastCalculator({
             <div>
               <p className="text-[11px] text-c4 mb-0.5">Залишилось виготовити</p>
               <p className="text-[16px] font-bold text-amber-600 dark:text-amber-400 tabular-nums leading-snug">
-                {totalRemaining.toLocaleString()} шт
+                {remaining.toLocaleString()} шт
               </p>
             </div>
-            {kitsRemaining !== undefined && (
-              <div>
-                <p className="text-[11px] text-c4 mb-0.5">Залишилось поштоматів</p>
-                <p className="text-[16px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums leading-snug">
-                  {kitsRemaining} компл.
-                </p>
-              </div>
-            )}
-            {kitPlan !== undefined && kitPlan > 0 && (
-              <div>
-                <p className="text-[11px] text-c4 mb-0.5">План поштоматів</p>
-                <p className="text-[16px] font-bold text-c1 tabular-nums leading-snug">
-                  {kitPlan} компл.
-                </p>
-              </div>
-            )}
+            <div>
+              <p className="text-[11px] text-c4 mb-0.5">Поштоматів у плані</p>
+              <p className="text-[16px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums leading-snug">
+                {kits} компл.
+              </p>
+            </div>
           </>
         ) : (
           <p className="text-[13px] text-c4">
