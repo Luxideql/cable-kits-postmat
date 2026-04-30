@@ -1,5 +1,16 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+
+const LS_KEY = 'forecast_calc_v1';
+
+function loadSaved() {
+  if (typeof window === 'undefined') return null;
+  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? 'null'); } catch { return null; }
+}
+
+function saveToLS(data: object) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+}
 
 const MONTHS_UK = ['Січень','Лютий','Березень','Квітень','Травень','Червень',
                    'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
@@ -245,11 +256,17 @@ export default function ForecastCalculator({
   defaultWorkers?: number;
   defaultPerWorker?: number;
 }) {
-  const [workers, setWorkers]     = useState(defaultWorkers);
-  const [perWorker, setPerWorker] = useState(defaultPerWorker);
-  const [skipSat, setSkipSat]     = useState(false);
-  const [skipSun, setSkipSun]     = useState(false);
-  const [kits, setKits]           = useState(kitPlan || kitsRemaining || 0);
+  const saved = useMemo(loadSaved, []);
+
+  const [workers, setWorkers]     = useState<number>(saved?.workers   ?? defaultWorkers);
+  const [perWorker, setPerWorker] = useState<number>(saved?.perWorker ?? defaultPerWorker);
+  const [skipSat, setSkipSat]     = useState<boolean>(saved?.skipSat  ?? false);
+  const [skipSun, setSkipSun]     = useState<boolean>(saved?.skipSun  ?? false);
+  const [kits, setKits]           = useState<number>(saved?.kits      ?? kitPlan ?? kitsRemaining ?? 0);
+
+  useEffect(() => {
+    saveToLS({ workers, perWorker, skipSat, skipSun, kits });
+  }, [workers, perWorker, skipSat, skipSun, kits]);
 
   const remaining = positions.length > 0
     ? positions.reduce((s, p) => s + Math.max(0, kits * p.qtyPerPostomat - p.available), 0)
