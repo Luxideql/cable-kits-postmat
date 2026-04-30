@@ -235,11 +235,13 @@ function ProductionCalendar({ today, completionDate, skipSat, skipSun, dailyQty 
 export default function ForecastCalculator({
   totalRemaining,
   kitsRemaining,
+  kitPlan,
   defaultWorkers = 1,
   defaultPerWorker = 0,
 }: {
   totalRemaining: number;
   kitsRemaining?: number;
+  kitPlan?: number;
   defaultWorkers?: number;
   defaultPerWorker?: number;
 }) {
@@ -313,6 +315,14 @@ export default function ForecastCalculator({
                 <p className="text-[11px] text-c4 mb-0.5">Залишилось поштоматів</p>
                 <p className="text-[16px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums leading-snug">
                   {kitsRemaining} компл.
+                </p>
+              </div>
+            )}
+            {kitPlan !== undefined && kitPlan > 0 && (
+              <div>
+                <p className="text-[11px] text-c4 mb-0.5">План поштоматів</p>
+                <p className="text-[16px] font-bold text-c1 tabular-nums leading-snug">
+                  {kitPlan} компл.
                 </p>
               </div>
             )}

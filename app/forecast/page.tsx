@@ -7,6 +7,7 @@ export default async function ForecastPage() {
   let error = '';
   let totalRemaining = 0;
   let kitsRemaining = 0;
+  let kitPlan = 0;
   let initialWorkers = 0;
   let initialDailyPlan = 0;
 
@@ -23,7 +24,7 @@ export default async function ForecastPage() {
       return s + Math.max(0, totalPlanUnits - p.available);
     }, 0);
 
-    const kitPlan = posRows[0]?.planQty ?? 0;
+    kitPlan = posRows[0]?.planQty ?? 0;
     kitsRemaining = Math.max(0, kitPlan - kitStats.totalKits);
     initialWorkers = employees.filter(e => e.active && e.notify).length;
     initialDailyPlan = dailyPlan;
@@ -51,6 +52,7 @@ export default async function ForecastPage() {
       <ForecastCalculator
         totalRemaining={totalRemaining}
         kitsRemaining={kitsRemaining}
+        kitPlan={kitPlan}
         defaultWorkers={initialWorkers || 1}
         defaultPerWorker={initPerWorker}
       />
