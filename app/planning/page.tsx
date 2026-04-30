@@ -1,7 +1,7 @@
 import { getKitStats, getEmployees, getDailyPlanQty } from '@/lib/data';
 import { getTodayDate } from '@/lib/calculations';
 import DailyPlanInput from '@/components/DailyPlanInput';
-import KitPlanTable from '@/components/KitPlanTable';
+import KitOverallInput from '@/components/KitOverallInput';
 
 export const dynamic = 'force-dynamic';
 
@@ -149,15 +149,8 @@ export default async function PlanningPage() {
       </div>
 
       {/* Kit plan editor */}
-      <KitPlanTable
-        positions={kitStats.positions.map(p => ({
-          id: p.id,
-          lengthMm: p.lengthMm,
-          number: p.number,
-          qtyPerPostomat: p.qtyPerPostomat,
-          planQty: p.planQty,
-          kits: p.kits,
-        }))}
+      <KitOverallInput
+        initial={kitStats.positions.find(p => p.planQty > 0)?.planQty ?? 0}
       />
 
       {/* Per-position progress table */}
