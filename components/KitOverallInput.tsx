@@ -23,15 +23,14 @@ export default function KitOverallInput({ initial }: { initial: number }) {
 
   return (
     <div className="card p-5">
-      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4 mb-1">
+      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4 mb-4">
         Загальний план комплектів
       </p>
-      <p className="text-[12px] text-c4 mb-4">Скільки поштоматів необхідно укомплектувати</p>
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-0 rounded-xl overflow-hidden"
              style={{ border: '1px solid var(--cbrd)' }}>
           <button
-            onClick={() => setValue(v => String(Math.max(0, (Number(v) || 0) - 1)))}
+            onClick={() => setValue(v => String(Math.max(0, (Number(v) || 0) - 10)))}
             className="w-9 h-10 flex items-center justify-center text-c3 hover:text-c1 transition-colors text-lg font-light"
             style={{ borderRight: '1px solid var(--cbrd)' }}
           >−</button>
@@ -44,7 +43,7 @@ export default function KitOverallInput({ initial }: { initial: number }) {
             className="w-24 h-10 text-center text-[18px] font-semibold text-c1 bg-transparent outline-none tabular-nums"
           />
           <button
-            onClick={() => setValue(v => String((Number(v) || 0) + 1))}
+            onClick={() => setValue(v => String((Number(v) || 0) + 10))}
             className="w-9 h-10 flex items-center justify-center text-c3 hover:text-c1 transition-colors text-lg font-light"
             style={{ borderLeft: '1px solid var(--cbrd)' }}
           >+</button>
