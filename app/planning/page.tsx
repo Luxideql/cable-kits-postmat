@@ -1,7 +1,8 @@
 import { getKitStats, getEmployees, getDailyPlanQty } from '@/lib/data';
 import { getTodayDate } from '@/lib/calculations';
+import DailyPlanInput from '@/components/DailyPlanInput';
 import KitOverallInput from '@/components/KitOverallInput';
-import PlanningSimulator from '@/components/PlanningSimulator';
+import ForecastCalculator from '@/components/ForecastCalculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +69,9 @@ export default async function PlanningPage() {
   const totalPlanUnits = posRows.reduce((s, r) => s + r.totalPlanUnits, 0);
   const totalDone      = posRows.reduce((s, r) => s + r.done, 0);
   const overallPct     = totalPlanUnits > 0 ? Math.round((totalDone / totalPlanUnits) * 100) : 0;
+  const overallDays    = dailyPlan > 0 ? Math.ceil(totalRemaining / dailyPlan) : null;
+  const overallDate    = overallDays !== null ? addDays(today, overallDays) : null;
+  const perWorker      = activeWorkers > 0 && dailyPlan > 0 ? Math.round(dailyPlan / activeWorkers) : 0;
 
   return (
     <div className="space-y-5 animate-fade-up">
@@ -82,12 +86,48 @@ export default async function PlanningPage() {
         initial={kitStats.positions.find(p => p.planQty > 0)?.planQty ?? 0}
       />
 
-      {/* Daily plan simulator */}
-      <PlanningSimulator
-        totalRemaining={totalRemaining}
-        initialWorkers={activeWorkers}
-        initialDailyPlan={dailyPlan}
-      />
+      {/* Daily plan input */}
+      <DailyPlanInput initial={dailyPlan} activeWorkers={activeWorkers} />
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="card-hover p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-2">Активних прац.</p>
+          <p className="text-[30px] font-semibold text-c1 leading-none">{activeWorkers}</p>
+          <p className="text-[11px] text-c4 mt-1.5">зі сповіщеннями</p>
+        </div>
+
+        <div className="card-hover p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-2">На прац. / день</p>
+          {perWorker > 0
+            ? <><p className="text-[30px] font-semibold text-indigo-600 dark:text-indigo-400 leading-none">{perWorker}</p><p className="text-[11px] text-c4 mt-1.5">шт / людину</p></>
+            : <><p className="text-[24px] font-semibold text-c4 leading-none">—</p><p className="text-[11px] text-c4 mt-1.5">задайте план</p></>
+          }
+        </div>
+
+        <div className="card-hover p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-2">Залишилось</p>
+          <p className="text-[30px] font-semibold text-amber-600 dark:text-amber-400 leading-none tabular-nums">
+            {totalRemaining.toLocaleString()}
+          </p>
+          <p className="text-[11px] text-c4 mt-1.5">шт до кінця плану</p>
+        </div>
+
+        <div className="card-hover p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-2">Планове завершення</p>
+          {overallDate
+            ? <>
+                <p className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400 leading-snug">
+                  {fmtDate(overallDate)}
+                </p>
+                <p className="text-[11px] text-c4 mt-1.5">
+                  {overallDays === 0 ? 'сьогодні' : `через ${overallDays} дн.`}
+                </p>
+              </>
+            : <><p className="text-[22px] font-semibold text-c4 leading-none">—</p><p className="text-[11px] text-c4 mt-1.5">задайте план</p></>
+          }
+        </div>
+      </div>
 
       {/* Overall progress */}
       <div className="card p-5">
@@ -112,6 +152,9 @@ export default async function PlanningPage() {
           />
         </div>
       </div>
+
+      {/* Forecast calculator */}
+      <ForecastCalculator totalRemaining={totalRemaining} />
 
       {/* Per-position table */}
       {posRows.length > 0 ? (
