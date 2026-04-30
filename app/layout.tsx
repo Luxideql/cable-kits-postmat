@@ -88,7 +88,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
             {/* ── Page content ── */}
             <main className="flex-1 px-4 sm:px-6 py-5 sm:py-6 pb-24 md:pb-6 dot-grid">
-              {children}
+              <div className="max-w-7xl mx-auto w-full">
+                {children}
+              </div>
             </main>
 
             {/* ── Footer ── */}
