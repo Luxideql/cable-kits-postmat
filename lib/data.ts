@@ -32,6 +32,10 @@ export async function getEmployees(): Promise<Employee[]> {
 
 export async function setEmployeeNotify(empId: string, notify: boolean): Promise<void> {
   const rows = await sheetGet('Працівники!A:F');
+  // Ensure header exists in F1
+  if (!rows[0] || rows[0].length < 6 || !rows[0][5]) {
+    await sheetUpdate('Працівники!F1', [['сповіщення']]);
+  }
   const idx = rows.findIndex((r, i) => i > 0 && r[0] === empId);
   if (idx > 0) {
     await sheetUpdate(`Працівники!F${idx + 1}`, [[String(notify)]]);
