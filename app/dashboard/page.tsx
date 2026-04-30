@@ -60,7 +60,7 @@ export default async function DashboardPage() {
     // Build all-time daily chart data
     const dateMap = new Map<string, number>();
     for (const r of allReports) dateMap.set(r.date, (dateMap.get(r.date) ?? 0) + r.qty);
-    const firstDate = [...dateMap.keys()].sort()[0];
+    const firstDate = Array.from(dateMap.keys()).sort()[0];
     if (firstDate) {
       const cur = new Date(firstDate);
       const end = new Date(today);
