@@ -1,12 +1,27 @@
 'use client';
 import { useState } from 'react';
 
-function calcEstDate(daysNeeded: number): string {
+function calcCalendarDate(daysNeeded: number): string {
   const d = new Date();
   d.setDate(d.getDate() + daysNeeded);
   const [y, m, day] = d.toISOString().split('T')[0].split('-');
   const weekdays = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
   return `${day}.${m}.${y} (${weekdays[d.getDay()]})`;
+}
+
+function calcWorkingDate(workingDaysNeeded: number): { label: string; calDays: number } {
+  const d = new Date();
+  let counted = 0;
+  let calDays = 0;
+  while (counted < workingDaysNeeded) {
+    d.setDate(d.getDate() + 1);
+    calDays++;
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6) counted++;
+  }
+  const [y, m, day] = d.toISOString().split('T')[0].split('-');
+  const weekdays = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+  return { label: `${day}.${m}.${y} (${weekdays[d.getDay()]})`, calDays };
 }
 
 function Stepper({ value, onChange, step = 1, min = 0 }: {
@@ -48,16 +63,52 @@ export default function ForecastCalculator({
 }) {
   const [workers, setWorkers] = useState(defaultWorkers);
   const [perWorker, setPerWorker] = useState(defaultPerWorker);
+  const [skipWeekends, setSkipWeekends] = useState(false);
 
   const totalDaily = workers * perWorker;
-  const daysNeeded = totalDaily > 0 ? Math.ceil(totalRemaining / totalDaily) : null;
-  const estDate = daysNeeded !== null ? calcEstDate(daysNeeded) : null;
+  const workingDaysNeeded = totalDaily > 0 ? Math.ceil(totalRemaining / totalDaily) : null;
+
+  let estDateLabel: string | null = null;
+  let subLabel: string | null = null;
+
+  if (workingDaysNeeded !== null) {
+    if (skipWeekends) {
+      if (workingDaysNeeded === 0) {
+        estDateLabel = calcCalendarDate(0);
+        subLabel = 'сьогодні';
+      } else {
+        const { label, calDays } = calcWorkingDate(workingDaysNeeded);
+        estDateLabel = label;
+        subLabel = `${workingDaysNeeded} роб. дн. (≈ ${calDays} кал.)`;
+      }
+    } else {
+      estDateLabel = calcCalendarDate(workingDaysNeeded);
+      subLabel = workingDaysNeeded === 0 ? 'сьогодні' : `через ${workingDaysNeeded} дн.`;
+    }
+  }
 
   return (
     <div className="card p-5">
-      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4 mb-4">
-        Калькулятор прогнозування
-      </p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">
+          Калькулятор прогнозування
+        </p>
+
+        {/* Weekend toggle */}
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <span className="text-[12px] text-c4">Без вихідних</span>
+          <button
+            role="switch"
+            aria-checked={skipWeekends}
+            onClick={() => setSkipWeekends(v => !v)}
+            className={`relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none
+              ${skipWeekends ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow
+              transition-transform duration-200 ${skipWeekends ? 'translate-x-4' : 'translate-x-0'}`} />
+          </button>
+        </label>
+      </div>
 
       <div className="flex flex-wrap gap-6 items-end">
         <div>
@@ -83,16 +134,14 @@ export default function ForecastCalculator({
       {/* Result */}
       <div className="mt-4 pt-4 flex flex-wrap gap-6 items-start"
            style={{ borderTop: '1px solid var(--cbrd)' }}>
-        {estDate ? (
+        {estDateLabel ? (
           <>
             <div>
               <p className="text-[11px] text-c4 mb-0.5">Прогнозована дата завершення</p>
               <p className="text-[16px] font-bold text-emerald-600 dark:text-emerald-400 leading-snug">
-                {estDate}
+                {estDateLabel}
               </p>
-              <p className="text-[11px] text-c4 mt-0.5">
-                {daysNeeded === 0 ? 'сьогодні' : `через ${daysNeeded} дн.`}
-              </p>
+              <p className="text-[11px] text-c4 mt-0.5">{subLabel}</p>
             </div>
             <div>
               <p className="text-[11px] text-c4 mb-0.5">Залишилось виготовити</p>
