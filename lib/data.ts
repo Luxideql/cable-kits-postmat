@@ -182,6 +182,21 @@ export async function getKitStats(): Promise<KitStats & { positions: PositionSta
   return calcKitStats(positions, reports, plan, shipments) as KitStats & { positions: PositionStats[] };
 }
 
+// ─── Daily Plan Settings ──────────────────────────────────────────────────────
+
+export async function getDailyPlanQty(): Promise<number> {
+  try {
+    const rows = await sheetGet('Налаштування!A:B');
+    const obj = rowsToObjects(rows).find(r => r['ключ'] === 'daily_qty_plan');
+    return obj ? Number(obj['значення']) || 0 : 0;
+  } catch { return 0; }
+}
+
+export async function setDailyPlanQty(qty: number): Promise<void> {
+  await sheetEnsure('Налаштування', ['ключ', 'значення']);
+  await sheetUpsert('Налаштування', 'A:B', 0, 'daily_qty_plan', ['daily_qty_plan', String(qty)]);
+}
+
 // ─── Bot State ────────────────────────────────────────────────────────────────
 // Columns: telegram_id | state | data | updated_at
 
