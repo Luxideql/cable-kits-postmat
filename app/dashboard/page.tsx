@@ -1,8 +1,10 @@
 import StatsCard from '@/components/StatsCard';
 import PositionsTable from '@/components/PositionsTable';
 import InfoTooltip from '@/components/InfoTooltip';
+import BarChart from '@/components/BarChart';
 import { getKitStats, getDailyReports, getShipments } from '@/lib/data';
 import { getTodayDate, formatDate } from '@/lib/calculations';
+import type { DayBar } from '@/components/BarChart';
 import type { ReactNode } from 'react';
 
 export const dynamic = 'force-dynamic';
@@ -18,80 +20,6 @@ const Ic = {
   Pack:  () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>),
 };
 
-// ── SVG bar chart (server-renderable) ─────────────────────────────────────────
-function BarChart({ data }: { data: { label: string; value: number; isToday?: boolean }[] }) {
-  const max   = Math.max(...data.map(d => d.value), 1);
-  const W     = 560;
-  const H     = 160;
-  const PX    = 8;
-  const n     = data.length;
-  const SLOT  = (W - PX * 2) / n;
-  const BAR_W = Math.floor(SLOT * 0.62);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H + 34}`} className="w-full" style={{ height: '200px' }}>
-      <defs>
-        <linearGradient id="bG" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.85"/>
-          <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.35"/>
-        </linearGradient>
-        <linearGradient id="bGT" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#a5b4fc" stopOpacity="1"/>
-          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.65"/>
-        </linearGradient>
-      </defs>
-
-      {/* Grid lines */}
-      {[0.25, 0.5, 0.75, 1].map(f => (
-        <line key={f}
-          x1={PX} y1={Math.round(H * (1 - f))}
-          x2={W - PX} y2={Math.round(H * (1 - f))}
-          stroke="rgba(100,116,139,0.1)" strokeWidth="1" strokeDasharray="3 3"
-        />
-      ))}
-
-      {data.map((d, i) => {
-        const slotX = PX + i * SLOT;
-        const x     = slotX + (SLOT - BAR_W) / 2;
-        const barH  = Math.max((d.value / max) * H, d.value > 0 ? 6 : 0);
-        const y     = H - barH;
-        const fill  = d.isToday ? 'url(#bGT)' : 'url(#bG)';
-
-        return (
-          <g key={i}>
-            {/* Background track */}
-            <rect x={x} y={0} width={BAR_W} height={H}
-                  fill={d.isToday ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.03)'}
-                  rx="8"/>
-            {/* Bar */}
-            {barH > 0 && (
-              <rect x={x} y={y} width={BAR_W} height={barH}
-                    fill={fill} rx="8" opacity={d.value === 0 ? 0.2 : 1}/>
-            )}
-            {/* Value */}
-            {d.value > 0 && (
-              <text x={x + BAR_W / 2} y={y - 7} textAnchor="middle"
-                    fontSize="11" fontWeight="600"
-                    fill={d.isToday ? '#818cf8' : 'rgba(99,102,241,0.75)'}>
-                {d.value}
-              </text>
-            )}
-            {/* Date */}
-            <text x={x + BAR_W / 2} y={H + 22} textAnchor="middle"
-                  fontSize="11" fontWeight={d.isToday ? '700' : '400'}
-                  fill={d.isToday ? '#818cf8' : 'rgba(100,116,139,0.65)'}>
-              {d.label}
-            </text>
-            {/* Today dot */}
-            {d.isToday && (
-              <circle cx={x + BAR_W / 2} cy={H + 32} r="2.5" fill="#818cf8"/>
-            )}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 function SectionHeader({ title, sub, children }: { title: string; sub?: string; children?: ReactNode }) {
   return (
@@ -109,9 +37,11 @@ function SectionHeader({ title, sub, children }: { title: string; sub?: string; 
 export default async function DashboardPage() {
   let kitStats: Awaited<ReturnType<typeof getKitStats>> | null = null;
   let todayTotal = 0, activeWorkers = 0;
-  let last7: { label: string; value: number; isToday: boolean }[] = [];
+  let allDays: DayBar[] = [];
   let recentShipments: Awaited<ReturnType<typeof getShipments>> = [];
   let error = '';
+
+  const MONTHS_SHORT = ['Січ','Лют','Бер','Кві','Тра','Чер','Лип','Сер','Вер','Жов','Лис','Гру'];
 
   try {
     const [stats, allReports, shipments] = await Promise.all([
@@ -126,11 +56,30 @@ export default async function DashboardPage() {
     const todayR = allReports.filter(r => r.date === today);
     todayTotal    = todayR.reduce((s, r) => s + r.qty, 0);
     activeWorkers = new Set(todayR.map(r => r.employeeId)).size;
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000);
-      const ds = d.toISOString().split('T')[0];
-      const [,m,day] = ds.split('-');
-      last7.push({ label:`${day}.${m}`, value: allReports.filter(r=>r.date===ds).reduce((s,r)=>s+r.qty,0), isToday:i===0 });
+
+    // Build all-time daily chart data
+    const dateMap = new Map<string, number>();
+    for (const r of allReports) dateMap.set(r.date, (dateMap.get(r.date) ?? 0) + r.qty);
+    const firstDate = [...dateMap.keys()].sort()[0];
+    if (firstDate) {
+      const cur = new Date(firstDate);
+      const end = new Date(today);
+      let prevMonth = -1;
+      while (cur <= end) {
+        const ds  = cur.toISOString().split('T')[0];
+        const [, , d] = ds.split('-');
+        const mo  = cur.getMonth();
+        const nm  = mo !== prevMonth;
+        if (nm) prevMonth = mo;
+        allDays.push({
+          label: d,
+          value: dateMap.get(ds) ?? 0,
+          isToday: ds === today,
+          newMonth: nm,
+          monthLabel: nm ? MONTHS_SHORT[mo] : '',
+        });
+        cur.setDate(cur.getDate() + 1);
+      }
     }
   } catch (e: unknown) { error = e instanceof Error ? e.message : String(e); }
 
@@ -145,7 +94,7 @@ export default async function DashboardPage() {
   const bn            = kitStats.bottleneck;
   const totalProduced = kitStats.positions.reduce((s, p) => s + p.produced, 0);
   const avgProgress   = Math.round(kitStats.positions.reduce((s,p)=>s+p.progress,0) / (kitStats.positions.length||1));
-  const weekTotal     = last7.reduce((s,d)=>s+d.value,0);
+  const weekTotal     = allDays.slice(-7).reduce((s,d)=>s+d.value,0);
   const readyToShip   = Math.max(0, kitStats.totalKits - kitStats.shipped);
 
   return (
@@ -209,10 +158,10 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Bar chart */}
         <div className="lg:col-span-2 card p-5">
-          <SectionHeader title="Виробіток за 7 днів" sub="Кількість одиниць по датам">
+          <SectionHeader title="Виробіток за весь час" sub="Кожна свічка — один день, скрол вліво для історії">
             <span className="badge-indigo">{weekTotal} шт / тиждень</span>
           </SectionHeader>
-          <BarChart data={last7} />
+          <BarChart data={allDays} />
         </div>
 
         {/* Position breakdown */}
