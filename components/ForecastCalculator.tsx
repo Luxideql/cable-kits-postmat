@@ -37,9 +37,17 @@ function Stepper({ value, onChange, step = 1, min = 0 }: {
   );
 }
 
-export default function ForecastCalculator({ totalRemaining }: { totalRemaining: number }) {
-  const [workers, setWorkers] = useState(1);
-  const [perWorker, setPerWorker] = useState(0);
+export default function ForecastCalculator({
+  totalRemaining,
+  defaultWorkers = 1,
+  defaultPerWorker = 0,
+}: {
+  totalRemaining: number;
+  defaultWorkers?: number;
+  defaultPerWorker?: number;
+}) {
+  const [workers, setWorkers] = useState(defaultWorkers);
+  const [perWorker, setPerWorker] = useState(defaultPerWorker);
 
   const totalDaily = workers * perWorker;
   const daysNeeded = totalDaily > 0 ? Math.ceil(totalRemaining / totalDaily) : null;
