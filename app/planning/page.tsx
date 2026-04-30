@@ -1,6 +1,7 @@
 import { getKitStats, getEmployees, getDailyPlanQty } from '@/lib/data';
 import { getTodayDate } from '@/lib/calculations';
 import DailyPlanInput from '@/components/DailyPlanInput';
+import KitPlanTable from '@/components/KitPlanTable';
 
 export const dynamic = 'force-dynamic';
 
@@ -147,7 +148,19 @@ export default async function PlanningPage() {
         </div>
       </div>
 
-      {/* Per-position table */}
+      {/* Kit plan editor */}
+      <KitPlanTable
+        positions={kitStats.positions.map(p => ({
+          id: p.id,
+          lengthMm: p.lengthMm,
+          number: p.number,
+          qtyPerPostomat: p.qtyPerPostomat,
+          planQty: p.planQty,
+          kits: p.kits,
+        }))}
+      />
+
+      {/* Per-position progress table */}
       {posRows.length > 0 ? (
         <div className="card overflow-hidden">
           <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--cbrd)' }}>
