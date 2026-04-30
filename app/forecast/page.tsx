@@ -6,6 +6,8 @@ export const dynamic = 'force-dynamic';
 export default async function ForecastPage() {
   let error = '';
   let totalRemaining = 0;
+  let kitsRemaining = 0;
+  let kitPlan = 0;
   let initialWorkers = 0;
   let initialDailyPlan = 0;
 
@@ -21,6 +23,9 @@ export default async function ForecastPage() {
       const totalPlanUnits = p.planQty * p.qtyPerPostomat;
       return s + Math.max(0, totalPlanUnits - p.available);
     }, 0);
+
+    kitPlan = posRows[0]?.planQty ?? 0;
+    kitsRemaining = Math.max(0, kitPlan - kitStats.totalKits);
 
     initialWorkers = employees.filter(e => e.active && e.notify).length;
     initialDailyPlan = dailyPlan;
@@ -45,23 +50,36 @@ export default async function ForecastPage() {
         <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Калькулятор прогнозування</h1>
       </div>
 
-      <div className="card p-5 grid grid-cols-2 gap-4">
+      <div className="card p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-1">Активних прац.</p>
           <p className="text-[28px] font-semibold text-c1 leading-none">{initialWorkers}</p>
           <p className="text-[11px] text-c4 mt-1">зі сповіщеннями</p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-1">Залишилось</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-1">Залишилось шт</p>
           <p className="text-[28px] font-semibold text-amber-600 dark:text-amber-400 leading-none tabular-nums">
             {totalRemaining.toLocaleString()}
           </p>
-          <p className="text-[11px] text-c4 mt-1">шт до кінця плану</p>
+          <p className="text-[11px] text-c4 mt-1">до кінця плану</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-1">Залишилось компл.</p>
+          <p className="text-[28px] font-semibold text-indigo-600 dark:text-indigo-400 leading-none tabular-nums">
+            {kitsRemaining}
+          </p>
+          <p className="text-[11px] text-c4 mt-1">поштоматів</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-1">План</p>
+          <p className="text-[28px] font-semibold text-c1 leading-none tabular-nums">{kitPlan}</p>
+          <p className="text-[11px] text-c4 mt-1">поштоматів всього</p>
         </div>
       </div>
 
       <ForecastCalculator
         totalRemaining={totalRemaining}
+        kitsRemaining={kitsRemaining}
         defaultWorkers={initialWorkers || 1}
         defaultPerWorker={initPerWorker}
       />

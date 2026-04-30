@@ -54,10 +54,12 @@ function Stepper({ value, onChange, step = 1, min = 0 }: {
 
 export default function ForecastCalculator({
   totalRemaining,
+  kitsRemaining,
   defaultWorkers = 1,
   defaultPerWorker = 0,
 }: {
   totalRemaining: number;
+  kitsRemaining?: number;
   defaultWorkers?: number;
   defaultPerWorker?: number;
 }) {
@@ -149,6 +151,14 @@ export default function ForecastCalculator({
                 {totalRemaining.toLocaleString()} шт
               </p>
             </div>
+            {kitsRemaining !== undefined && (
+              <div>
+                <p className="text-[11px] text-c4 mb-0.5">Залишилось поштоматів</p>
+                <p className="text-[16px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums leading-snug">
+                  {kitsRemaining} компл.
+                </p>
+              </div>
+            )}
           </>
         ) : (
           <p className="text-[13px] text-c4">

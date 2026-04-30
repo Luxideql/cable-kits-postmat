@@ -67,6 +67,8 @@ export default async function PlanningPage() {
 
   const totalRemaining = posRows.reduce((s, r) => s + r.remaining, 0);
   const totalPlanUnits = posRows.reduce((s, r) => s + r.totalPlanUnits, 0);
+  const kitPlan = kitStats.positions.find(p => p.planQty > 0)?.planQty ?? 0;
+  const kitsRemaining = Math.max(0, kitPlan - kitStats.totalKits);
   const totalDone      = posRows.reduce((s, r) => s + r.done, 0);
   const overallPct     = totalPlanUnits > 0 ? Math.round((totalDone / totalPlanUnits) * 100) : 0;
   const overallDays    = dailyPlan > 0 ? Math.ceil(totalRemaining / dailyPlan) : null;
@@ -154,7 +156,7 @@ export default async function PlanningPage() {
       </div>
 
       {/* Forecast calculator */}
-      <ForecastCalculator totalRemaining={totalRemaining} />
+      <ForecastCalculator totalRemaining={totalRemaining} kitsRemaining={kitsRemaining} />
 
       {/* Per-position table */}
       {posRows.length > 0 ? (
