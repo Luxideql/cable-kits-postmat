@@ -157,7 +157,7 @@ export default async function DashboardPage() {
       {/* Chart row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Bar chart */}
-        <div className="lg:col-span-2 card p-5">
+        <div className="lg:col-span-2 card p-5 self-start">
           <SectionHeader title="Виробіток за весь час" sub="Кожна свічка — один день, скрол вліво для історії">
             <span className="badge-indigo">{weekTotal} шт / тиждень</span>
           </SectionHeader>
