@@ -155,7 +155,8 @@ function PrintModal({
                   key={i}
                   style={{
                     padding: '28px 36px',
-                    borderBottom: isLast ? 'none' : '2px dashed #d1d5db',
+                    pageBreakAfter: isLast ? 'auto' : 'always',
+                    breakAfter: isLast ? 'auto' : 'page',
                     pageBreakInside: 'avoid',
                     breakInside: 'avoid',
                   }}
