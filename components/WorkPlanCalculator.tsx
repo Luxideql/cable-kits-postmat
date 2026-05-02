@@ -309,7 +309,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
     <div className="space-y-4">
 
       {/* Metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatsCard
           title="Після виробітку"
           value={unitsPerKit > 0 ? actualKits : '—'}
@@ -330,13 +330,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
           sub={`дефіцит — до ${targetKits} компл.`}
           color="amber"
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}
-        />
-        <StatsCard
-          title="Одиниць / компл."
-          value={`${unitsPerKit} шт`}
-          sub={`у ${positions.filter(p => p.qtyPerPostomat > 0).length} позиціях`}
-          color="slate"
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>}
         />
         <StatsCard
           title="Працівників"
