@@ -103,10 +103,9 @@ export default function Sidebar() {
         {/* ── Logo ── */}
         <div className="flex items-center gap-3 px-5 py-4"
              style={{ borderBottom: '1px solid var(--csdb-brd)' }}>
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0
-                          bg-gradient-to-br from-indigo-500 to-purple-600
-                          shadow-[0_0_16px_rgba(99,102,241,0.3)]">
-            <Icon.Bolt />
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 overflow-hidden bg-white
+                          shadow-[0_0_16px_rgba(99,102,241,0.15)]">
+            <img src="/uislogo.png" alt="UIS" className="w-6 h-6 object-contain" />
           </div>
           <div>
             <p className="text-[13px] font-semibold leading-none tracking-tight text-c1">Cable CRM</p>
