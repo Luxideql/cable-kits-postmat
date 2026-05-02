@@ -193,11 +193,13 @@ export default function Sidebar() {
 
       {/* ═══ Mobile Bottom Nav (< md) ═══ */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex overflow-x-auto"
         style={{
           backgroundColor: 'var(--csdb)',
           borderTop: '1px solid var(--csdb-brd)',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
         }}
       >
         {NAV.map(({ href, label, icon: NavIcon }) => {
@@ -206,18 +208,18 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
-              className={`relative flex-1 flex flex-col items-center justify-center gap-1 py-2
+              className={`relative shrink-0 flex flex-col items-center justify-center gap-0.5 py-1.5
                 transition-colors duration-150
                 ${active ? 'text-indigo-500 dark:text-indigo-400' : ''}`}
-              style={!active ? { color: 'var(--c4)' } : {}}
+              style={{ minWidth: '64px', color: active ? undefined : 'var(--c4)' }}
             >
               {/* Active top line */}
               {active && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px]
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px]
                                  bg-indigo-500 rounded-b-full" />
               )}
-              <NavIcon size={20} />
-              <span className="text-[11px] font-medium leading-none">{label}</span>
+              <NavIcon size={16} />
+              <span className="text-[10px] font-medium leading-none">{label}</span>
             </Link>
           );
         })}
