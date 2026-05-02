@@ -3,13 +3,15 @@ import type { Position, ProductionPlan, DailyReport, PositionStats, KitStats, Sh
 export function calcPositionStats(
   pos: Position,
   reports: DailyReport[],
-  plan: ProductionPlan[]
+  plan: ProductionPlan[],
+  shippedKits = 0
 ): PositionStats {
   const produced = reports
     .filter(r => r.positionId === pos.id)
     .reduce((s, r) => s + r.qty, 0);
 
-  const available = pos.stock + produced;
+  // Subtract units consumed by shipped kits
+  const available = Math.max(0, pos.stock + produced - shippedKits * pos.qtyPerPostomat);
   const kits      = pos.qtyPerPostomat > 0 ? Math.floor(available / pos.qtyPerPostomat) : 0;
   const leftover  = available - kits * pos.qtyPerPostomat; // штук, що не увійшли у повний комплект
 
@@ -28,14 +30,14 @@ export function calcKitStats(
   plan: ProductionPlan[],
   shipments: Shipment[] = []
 ): KitStats {
-  const stats = positions.map(p => calcPositionStats(p, reports, plan));
+  const shipped = shipments.reduce((s, r) => s + r.qty, 0);
+  const stats = positions.map(p => calcPositionStats(p, reports, plan, shipped));
   const active = stats.filter(s => s.qtyPerPostomat > 0);
 
   const totalKits = active.length > 0 ? Math.min(...active.map(s => s.kits)) : 0;
   const bottleneck = active.length > 0
     ? active.reduce((min, s) => (s.kits < min.kits ? s : min))
     : null;
-  const shipped = shipments.reduce((s, r) => s + r.qty, 0);
 
   return { totalKits, shipped, bottleneck, positions: stats };
 }
