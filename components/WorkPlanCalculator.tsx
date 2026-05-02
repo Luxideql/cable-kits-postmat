@@ -291,18 +291,37 @@ export default function WorkPlanCalculator({ positions }: Props) {
             Друкувати
           </button>
         </div>
+        {/* Kit result summary */}
+        <div className="flex items-center gap-3 mb-5 p-3 rounded-xl tabular-nums"
+             style={{ backgroundColor: 'var(--chov)', border: '1px solid var(--cbrd)' }}>
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-[15px] font-semibold text-c1">{workers}</span>
+            <span className="text-[12px] text-c4">прац.</span>
+            <span className="text-[14px] text-c4 mx-0.5">×</span>
+            <span className="text-[15px] font-semibold text-c1">{planPerWorker}</span>
+            <span className="text-[12px] text-c4">шт</span>
+            <span className="text-[14px] text-c4 mx-0.5">=</span>
+            <span className="text-[15px] font-semibold text-c1">{totalUnits}</span>
+            <span className="text-[12px] text-c4">шт</span>
+            {unitsPerKit > 0 && (
+              <>
+                <span className="text-[14px] text-c4 mx-0.5">÷</span>
+                <span className="text-[13px] text-c4">{unitsPerKit} шт/компл.</span>
+                <span className="text-[14px] text-c4 mx-0.5">=</span>
+              </>
+            )}
+          </div>
+          <div className="ml-auto shrink-0 text-right">
+            <p className="text-[32px] font-bold leading-none text-indigo-600 dark:text-indigo-400">
+              {unitsPerKit > 0 ? Math.floor(totalKits) : '—'}
+            </p>
+            <p className="text-[11px] font-semibold text-c4 mt-0.5 uppercase tracking-wide">комплектів</p>
+          </div>
+        </div>
+
         <div className="flex flex-wrap gap-6 items-end">
           <Stepper label="Кількість працівників" value={workers} onChange={setWorkers} />
           <Stepper label="План на 1 прац. (шт)" value={planPerWorker} onChange={setPlanPerWorker} />
-          <div>
-            <p className="text-[12px] font-medium text-c4 mb-1">Загальна ціль</p>
-            <p className="text-[26px] font-semibold text-c1 leading-none tabular-nums">
-              {totalUnits} <span className="text-[14px] font-normal text-c4">шт</span>
-            </p>
-            <p className="text-[11px] text-c4 mt-0.5">
-              ≈ {Math.floor(totalKits)} компл. · {workers} × {planPerWorker}
-            </p>
-          </div>
         </div>
       </div>
 
