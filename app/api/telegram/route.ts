@@ -208,12 +208,12 @@ async function handleCallback(cb: Update) {
   }
 
   if (data === 'prod|kits') {
-    const stats = await getKitStats();
-    const planQty = stats.positions.find(p => p.planQty > 0)?.planQty ?? 0;
+    const positions = await getPositions();
+    const unitsPerKit = positions.reduce((s, p) => s + p.qtyPerPostomat, 0);
     await setBotState(tgId, 'await_kits_all', '');
     await sendMessage(
       chatId,
-      `📦 <b>Готові комплекти</b>${planQty > 0 ? `\nПлан: <b>${planQty} компл.</b>` : ''}\n\nВведіть кількість виготовлених комплектів:`,
+      `📦 <b>Готові комплекти</b>\n1 компл. = <b>${unitsPerKit} шт</b>\n\nВведіть кількість виготовлених комплектів:`,
       { reply_markup: { remove_keyboard: true } }
     );
   }
