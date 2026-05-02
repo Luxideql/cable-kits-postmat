@@ -1,5 +1,6 @@
 'use client';
 import { useState, useMemo, useEffect } from 'react';
+import StatsCard from '@/components/StatsCard';
 
 type PositionRow = {
   id: string;
@@ -291,38 +292,42 @@ export default function WorkPlanCalculator({ positions }: Props) {
             Друкувати
           </button>
         </div>
-        {/* Kit result summary */}
-        <div className="flex items-center gap-3 mb-5 p-3 rounded-xl tabular-nums"
-             style={{ backgroundColor: 'var(--chov)', border: '1px solid var(--cbrd)' }}>
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-[15px] font-semibold text-c1">{workers}</span>
-            <span className="text-[12px] text-c4">прац.</span>
-            <span className="text-[14px] text-c4 mx-0.5">×</span>
-            <span className="text-[15px] font-semibold text-c1">{planPerWorker}</span>
-            <span className="text-[12px] text-c4">шт</span>
-            <span className="text-[14px] text-c4 mx-0.5">=</span>
-            <span className="text-[15px] font-semibold text-c1">{totalUnits}</span>
-            <span className="text-[12px] text-c4">шт</span>
-            {unitsPerKit > 0 && (
-              <>
-                <span className="text-[14px] text-c4 mx-0.5">÷</span>
-                <span className="text-[13px] text-c4">{unitsPerKit} шт/компл.</span>
-                <span className="text-[14px] text-c4 mx-0.5">=</span>
-              </>
-            )}
-          </div>
-          <div className="ml-auto shrink-0 text-right">
-            <p className="text-[32px] font-bold leading-none text-indigo-600 dark:text-indigo-400">
-              {unitsPerKit > 0 ? Math.floor(totalKits) : '—'}
-            </p>
-            <p className="text-[11px] font-semibold text-c4 mt-0.5 uppercase tracking-wide">комплектів</p>
-          </div>
-        </div>
-
         <div className="flex flex-wrap gap-6 items-end">
           <Stepper label="Кількість працівників" value={workers} onChange={setWorkers} />
           <Stepper label="План на 1 прац. (шт)" value={planPerWorker} onChange={setPlanPerWorker} />
         </div>
+      </div>
+
+      {/* Metric cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatsCard
+          title="Комплектів"
+          value={unitsPerKit > 0 ? Math.floor(totalKits) : '—'}
+          sub={unitsPerKit > 0 ? `${totalUnits} ÷ ${unitsPerKit} шт/компл.` : 'немає позицій'}
+          color="indigo"
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>}
+        />
+        <StatsCard
+          title="Загальний план"
+          value={`${totalUnits} шт`}
+          sub={`${workers} прац. × ${planPerWorker} шт`}
+          color="emerald"
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>}
+        />
+        <StatsCard
+          title="Одиниць / компл."
+          value={`${unitsPerKit} шт`}
+          sub={`у ${positions.filter(p => p.qtyPerPostomat > 0).length} позиціях`}
+          color="slate"
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>}
+        />
+        <StatsCard
+          title="Працівників"
+          value={workers}
+          sub={`по ${planPerWorker} шт кожен`}
+          color="violet"
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
+        />
       </div>
 
       {/* Worker cards */}
