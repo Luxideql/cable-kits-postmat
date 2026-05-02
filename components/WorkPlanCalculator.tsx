@@ -42,7 +42,7 @@ type Task = { lengthMm: number; posId: string; qty: number };
 function distribute(positions: PositionRow[], workers: number, planPerWorker: number, totalKits: number): Task[][] {
   // Calculate needed per position
   const needed = positions
-    .map(p => ({ id: p.id, lengthMm: p.lengthMm, needed: Math.round(totalKits * p.qtyPerPostomat) }))
+    .map(p => ({ id: p.id, lengthMm: p.lengthMm, needed: Math.ceil(totalKits * p.qtyPerPostomat) }))
     .filter(p => p.needed > 0)
     .sort((a, b) => b.needed - a.needed); // largest first
 
