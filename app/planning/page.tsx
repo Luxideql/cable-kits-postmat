@@ -2,6 +2,7 @@ import { getKitStats, getEmployees, getDailyPlanQty } from '@/lib/data';
 import { getTodayDate } from '@/lib/calculations';
 import DailyPlanInput from '@/components/DailyPlanInput';
 import KitOverallInput from '@/components/KitOverallInput';
+import InfoTooltip from '@/components/InfoTooltip';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,9 +76,18 @@ export default async function PlanningPage() {
   return (
     <div className="space-y-5 animate-fade-up">
       {/* Header */}
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Виробництво</p>
-        <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Планування</h1>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Виробництво</p>
+          <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Планування</h1>
+        </div>
+        <InfoTooltip>
+          <p><b>План комплектів</b> — загальна кількість готових комплектів що потрібно виготовити.</p>
+          <p><b>Активних прац.</b> — працівники з увімкненими сповіщеннями в Telegram.</p>
+          <p><b>На прац. / день</b> = Загальний план ÷ Кількість активних працівників.</p>
+          <p><b>Залишилось</b> — одиниць ще потрібно виробити до виконання плану.</p>
+          <p><b>Планове завершення</b> — розрахована дата якщо виробляти по поточному плану щодня.</p>
+        </InfoTooltip>
       </div>
 
       {/* Kit plan */}

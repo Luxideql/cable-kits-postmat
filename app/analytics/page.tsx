@@ -1,5 +1,6 @@
 import { getPositions, getDailyReports, getEmployees } from '@/lib/data';
 import { getTodayDate } from '@/lib/calculations';
+import InfoTooltip from '@/components/InfoTooltip';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,9 +84,17 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="space-y-5 animate-fade-up">
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Звіти</p>
-        <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Аналітика</h1>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Звіти</p>
+          <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Аналітика</h1>
+        </div>
+        <InfoTooltip>
+          <p><b>Сьогодні / Тиждень / Всього</b> — кількість одиниць продукції по всіх звітах за відповідний період.</p>
+          <p><b>Виробіток за 7 днів</b> — стовпчиковий графік одиниць по датах.</p>
+          <p><b>По працівниках</b> — рейтинг виробітку за поточний тиждень.</p>
+          <p><b>По позиціях</b> — загальний виробіток по кожній позиції за весь час.</p>
+        </InfoTooltip>
       </div>
 
       {/* Summary */}

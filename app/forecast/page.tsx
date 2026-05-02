@@ -1,5 +1,6 @@
 import { getKitStats, getDailyPlanQty, getEmployees } from '@/lib/data';
 import ForecastCalculator from '@/components/ForecastCalculator';
+import InfoTooltip from '@/components/InfoTooltip';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,9 +43,17 @@ export default async function ForecastPage() {
 
   return (
     <div className="space-y-5 animate-fade-up">
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Виробництво</p>
-        <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Калькулятор прогнозування</h1>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Виробництво</p>
+          <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Калькулятор прогнозування</h1>
+        </div>
+        <InfoTooltip>
+          <p><b>Кількість комплектів що залишилось</b> — план мінус вже готові комплекти.</p>
+          <p><b>Кількість працівників та план</b> — визначають загальний денний виробіток.</p>
+          <p><b>Дата завершення</b> — обчислюється як залишок ÷ денний план, з урахуванням тільки робочих днів.</p>
+          <p><b>Буфер</b> — запас часу якщо фактичний виробіток нижчий за план.</p>
+        </InfoTooltip>
       </div>
 
       <ForecastCalculator

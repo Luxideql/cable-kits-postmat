@@ -1,5 +1,6 @@
 import { getKitStats } from '@/lib/data';
 import WorkPlanCalculator from '@/components/WorkPlanCalculator';
+import InfoTooltip from '@/components/InfoTooltip';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,9 +31,17 @@ export default async function WorkPlanPage() {
 
   return (
     <div className="space-y-5 animate-fade-up">
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Виробництво</p>
-        <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Норма виробітку</h1>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Виробництво</p>
+          <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Норма виробітку</h1>
+        </div>
+        <InfoTooltip>
+          <p><b>Загальна ціль</b> = Кількість працівників × План на 1 прац. (шт).</p>
+          <p><b>Компл.</b> = Загальна ціль ÷ Кількість одиниць в 1 комплекті.</p>
+          <p><b>Розподіл</b> — позиції сортуються від більшої до меншої потреби і послідовно заповнюють кожного працівника до його плану.</p>
+          <p><b>Округлення</b> — якщо кількість не ділиться рівно, завжди округляється вгору.</p>
+        </InfoTooltip>
       </div>
       <WorkPlanCalculator positions={positions} />
     </div>

@@ -2,6 +2,7 @@ import { getEmployees, getDailyReports } from '@/lib/data';
 import { getTodayDate } from '@/lib/calculations';
 import type { EmployeeStats, DailyReport } from '@/lib/types';
 import NotifyToggle from '@/components/NotifyToggle';
+import InfoTooltip from '@/components/InfoTooltip';
 
 export const dynamic = 'force-dynamic';
 
@@ -106,7 +107,15 @@ export default async function EmployeesPage() {
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Команда</p>
           <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Працівники</h1>
         </div>
-        <span className="badge-slate">{stats.length} зареєстровано</span>
+        <div className="flex items-center gap-2">
+          <InfoTooltip>
+            <p><b>Активних сьогодні</b> — кількість працівників що зафіксували виробіток сьогодні.</p>
+            <p><b>Кращий за тиждень</b> — працівник з найбільшим виробітком за останні 7 днів.</p>
+            <p><b>Всього вироблено</b> — сума всіх одиниць за весь час по всіх працівниках.</p>
+            <p><b>Виробіток по днях</b> — теплова карта за 14 днів; яскравість відповідає відносному об'єму.</p>
+          </InfoTooltip>
+          <span className="badge-slate">{stats.length} зареєстровано</span>
+        </div>
       </div>
 
       {/* Summary cards */}

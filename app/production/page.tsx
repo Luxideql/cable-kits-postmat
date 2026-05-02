@@ -1,6 +1,7 @@
 import { getPositions, getEmployees } from '@/lib/data';
 import ProductionBatchEntry from '@/components/ProductionBatchEntry';
 import { getTodayDate } from '@/lib/calculations';
+import InfoTooltip from '@/components/InfoTooltip';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,9 +33,17 @@ export default async function ProductionPage() {
 
   return (
     <div className="space-y-5 animate-fade-up">
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Виробництво</p>
-        <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Виробіток</h1>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Виробництво</p>
+          <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Виробіток</h1>
+        </div>
+        <InfoTooltip>
+          <p><b>По компл.</b> — вводиться кількість готових комплектів; система автоматично розраховує одиниці кожної позиції та записує звіти.</p>
+          <p><b>Поштучно</b> — вводиться кількість одиниць для кожної позиції окремо.</p>
+          <p><b>Дата</b> — можна обрати будь-яку дату для backdating звіту.</p>
+          <p><b>Працівник</b> — звіт прив'язується до конкретного працівника.</p>
+        </InfoTooltip>
       </div>
 
       <ProductionBatchEntry
