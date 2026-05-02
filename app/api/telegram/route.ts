@@ -5,7 +5,7 @@ import {
 } from '@/lib/telegram';
 import {
   getContext, getPositions, getEmployees,
-  getDailyReports, addReportAndResetState, addEmployee,
+  getDailyReports, addDailyReport, addReportAndResetState, addEmployee,
   getKitStats, setBotState, addShipment,
 } from '@/lib/data';
 import { getTodayDate, formatDate } from '@/lib/calculations';
@@ -79,29 +79,36 @@ async function handleMessage(msg: Update) {
     return;
   }
 
-  if (botState?.state === 'await_kits' && text && !isNaN(Number(text))) {
+  if (botState?.state === 'await_kits_all' && text && !isNaN(Number(text))) {
     const kits = Number(text);
     if (kits <= 0) {
       await sendMessage(chatId, '❌ Кількість має бути більше 0. Введіть ще раз:');
       return;
     }
-    const data = JSON.parse(botState.data || '{}');
-    const qty = kits * (data.qtyPerPostomat ?? 1);
     const empId = employee?.id ?? tgId;
     const empName = employee?.fullName ?? 'Невідомий';
+    const today = getTodayDate();
 
-    await addReportAndResetState({
-      date: getTodayDate(),
-      employeeId: empId,
-      positionId: data.positionId,
-      qty,
-      hours: 0,
-      comment: `${kits} компл.`,
-    }, tgId);
+    const positions = await getPositions();
+    const active = positions.filter(p => p.qtyPerPostomat > 0);
+    const totalUnits = active.reduce((s, p) => s + kits * p.qtyPerPostomat, 0);
 
+    await Promise.all([
+      ...active.map(p => addDailyReport({
+        date: today,
+        employeeId: empId,
+        positionId: p.id,
+        qty: kits * p.qtyPerPostomat,
+        hours: 0,
+        comment: `${kits} компл.`,
+      })),
+      setBotState(tgId, 'idle', ''),
+    ]);
+
+    const lines = active.map(p => `  • ${p.lengthMm} мм — ${kits * p.qtyPerPostomat} шт`).join('\n');
     await sendMessage(
       chatId,
-      `✅ Записано!\n👷 <b>${empName}</b>\n📏 ${data.positionName}\n📦 <b>${kits} компл.</b> = ${qty} шт`,
+      `✅ Записано!\n👷 <b>${empName}</b>\n📦 <b>${kits} готових комплектів</b> = ${totalUnits} шт\n\n${lines}`,
       { reply_markup: mainMenuKeyboard() }
     );
     return;
@@ -185,49 +192,42 @@ async function handleCallback(cb: Update) {
 
   await answerCallback(cb.id);
 
+  if (data === 'prod|positions') {
+    const positions = await getPositions();
+    if (!positions.length) {
+      await sendMessage(chatId, '❌ Позицій не знайдено.');
+      return;
+    }
+    const buttons = positions.map(p => ([{
+      text: `${p.lengthMm} мм (${p.qtyPerPostomat} шт/компл.)`,
+      callback_data: `pos|${p.id}`,
+    }]));
+    await sendMessage(chatId, `📋 Оберіть позицію:`, {
+      reply_markup: { inline_keyboard: buttons },
+    });
+  }
+
+  if (data === 'prod|kits') {
+    await setBotState(tgId, 'await_kits_all', '');
+    await sendMessage(
+      chatId,
+      `📦 <b>Готові комплекти</b>\n\nВведіть кількість виготовлених комплектів:`,
+      { reply_markup: { remove_keyboard: true } }
+    );
+  }
+
   if (data.startsWith('pos|')) {
     const posId = data.split('|')[1];
     const positions = await getPositions();
     const pos = positions.find(p => p.id === posId);
     const posName = pos ? `Кабель ${pos.lengthMm} мм` : posId;
-    const qtyPerPostomat = pos?.qtyPerPostomat ?? 1;
 
+    await setBotState(tgId, 'await_qty', JSON.stringify({ positionId: posId, positionName: posName }));
     await sendMessage(
       chatId,
-      `📏 <b>${posName}</b>\nна 1 комплект: ${qtyPerPostomat} шт\n\nЯк вводити виробіток?`,
-      {
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '📦 Комплектами', callback_data: `mode|kits|${posId}` },
-            { text: '🔢 Штучно', callback_data: `mode|units|${posId}` },
-          ]],
-        },
-      }
+      `📏 <b>${posName}</b>\n\nВведіть кількість виготовлених штук:`,
+      { reply_markup: { remove_keyboard: true } }
     );
-  }
-
-  if (data.startsWith('mode|')) {
-    const [, inputMode, posId] = data.split('|');
-    const positions = await getPositions();
-    const pos = positions.find(p => p.id === posId);
-    const posName = pos ? `Кабель ${pos.lengthMm} мм` : posId;
-    const qtyPerPostomat = pos?.qtyPerPostomat ?? 1;
-
-    if (inputMode === 'kits') {
-      await setBotState(tgId, 'await_kits', JSON.stringify({ positionId: posId, positionName: posName, qtyPerPostomat }));
-      await sendMessage(
-        chatId,
-        `📦 <b>${posName}</b>\n1 компл. = ${qtyPerPostomat} шт\n\nВведіть кількість комплектів:`,
-        { reply_markup: { remove_keyboard: true } }
-      );
-    } else {
-      await setBotState(tgId, 'await_qty', JSON.stringify({ positionId: posId, positionName: posName }));
-      await sendMessage(
-        chatId,
-        `🔢 <b>${posName}</b>\n\nВведіть кількість виготовлених штук:`,
-        { reply_markup: { remove_keyboard: true } }
-      );
-    }
   }
 
   if (data.startsWith('emp:')) {
@@ -247,20 +247,18 @@ async function handleStart(chatId: number, tgId: string, employee: Employee) {
 }
 
 async function handleAddProduction(chatId: number, tgId: string, employee: Employee) {
-  const positions = await getPositions();
-  if (!positions.length) {
-    await sendMessage(chatId, '❌ Позицій не знайдено.');
-    return;
-  }
-
-  const buttons = positions.map(p => ([{
-    text: `${p.lengthMm} мм (${p.qtyPerPostomat} шт)`,
-    callback_data: `pos|${p.id}`,
-  }]));
-
-  await sendMessage(chatId, `👷 <b>${employee.fullName}</b>\n\nОберіть позицію:`, {
-    reply_markup: { inline_keyboard: buttons },
-  });
+  await sendMessage(
+    chatId,
+    `👷 <b>${employee.fullName}</b>\n\nОберіть тип виробітку:`,
+    {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '📋 Позиції', callback_data: 'prod|positions' },
+          { text: '📦 Готові комплекти', callback_data: 'prod|kits' },
+        ]],
+      },
+    }
+  );
 }
 
 async function handleMyStats(chatId: number, tgId: string, employee: Employee) {
