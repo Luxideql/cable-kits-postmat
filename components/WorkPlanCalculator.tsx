@@ -52,11 +52,11 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const unitsPerKit = positions.reduce((s, p) => s + p.qtyPerPostomat, 0);
   const totalKits   = unitsPerKit > 0 ? totalUnits / unitsPerKit : 0;
 
-  // Per-position: how many units remain to be produced
+  // Per-position: how many units to produce (plan only, stock not deducted)
   const posRemaining = positions.map(p => ({
     ...p,
     needed:    Math.round(totalKits * p.qtyPerPostomat),
-    remaining: Math.max(0, Math.round(totalKits * p.qtyPerPostomat) - p.available),
+    remaining: Math.round(totalKits * p.qtyPerPostomat),
   }));
 
   const totalRemaining = posRemaining.reduce((s, p) => s + p.remaining, 0);
@@ -77,7 +77,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
     }
   }
 
-  const allDone = totalRemaining === 0;
+  const allDone = false;
 
   return (
     <div className="space-y-4">
