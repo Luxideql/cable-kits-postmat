@@ -41,13 +41,8 @@ function Stepper({ label, sub, value, onChange }: {
 type Task = { lengthMm: number; posId: string; qty: number };
 
 function distribute(positions: PositionRow[], workers: number, planPerWorker: number, totalKits: number): Task[][] {
-  // Only produce what's missing: target - already in stock
   const needed = positions
-    .map(p => ({
-      id: p.id,
-      lengthMm: p.lengthMm,
-      needed: Math.max(0, Math.ceil(totalKits * p.qtyPerPostomat) - p.available),
-    }))
+    .map(p => ({ id: p.id, lengthMm: p.lengthMm, needed: Math.ceil(totalKits * p.qtyPerPostomat) }))
     .filter(p => p.needed > 0)
     .sort((a, b) => b.needed - a.needed);
 
@@ -269,14 +264,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
     [positions, workers, planPerWorker, totalKits]
   );
 
-  // Kits available from stock right now (before any production)
-  const stockKits = useMemo(() => {
-    const active = positions.filter(p => p.qtyPerPostomat > 0);
-    if (active.length === 0) return 0;
-    return Math.min(...active.map(p => Math.floor(p.available / p.qtyPerPostomat)));
-  }, [positions]);
-
-  // Complete kits after workers produce their tasks (stock + production)
+  // Actual complete kits based on real distributed quantities per position
   const actualKits = useMemo(() => {
     const active = positions.filter(p => p.qtyPerPostomat > 0);
     if (active.length === 0) return 0;
@@ -285,17 +273,9 @@ export default function WorkPlanCalculator({ positions }: Props) {
       const produced = allTasks
         .filter(t => t.posId === p.id)
         .reduce((s, t) => s + t.qty, 0);
-      return Math.floor((p.available + produced) / p.qtyPerPostomat);
+      return Math.floor(produced / p.qtyPerPostomat);
     }));
   }, [workerTasks, positions]);
-
-  // Total units workers actually need to produce (deficit across all positions)
-  const totalToMake = useMemo(() =>
-    positions
-      .filter(p => p.qtyPerPostomat > 0)
-      .reduce((s, p) => s + Math.max(0, Math.ceil(totalKits * p.qtyPerPostomat) - p.available), 0),
-    [positions, totalKits]
-  );
 
   function updateName(i: number, name: string) {
     setWorkerNames(prev => {
@@ -311,25 +291,18 @@ export default function WorkPlanCalculator({ positions }: Props) {
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatsCard
-          title="Після виробітку"
+          title="Готових комплектів"
           value={unitsPerKit > 0 ? actualKits : '—'}
-          sub={unitsPerKit > 0 ? `склад ${stockKits} + доробити ${totalToMake} шт` : 'немає позицій'}
+          sub={unitsPerKit > 0 ? `з ${totalUnits} шт виробітку` : 'немає позицій'}
           color="indigo"
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>}
         />
         <StatsCard
-          title="Вже на складі"
-          value={unitsPerKit > 0 ? stockKits : '—'}
-          sub="готових комплектів зараз"
+          title="Загальний план"
+          value={`${totalUnits} шт`}
+          sub={`${workers} прац. × ${planPerWorker} шт`}
           color="emerald"
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>}
-        />
-        <StatsCard
-          title="Треба доробити"
-          value={`${totalToMake} шт`}
-          sub={`дефіцит по ${positions.filter(p => p.qtyPerPostomat > 0 && Math.ceil(totalKits * p.qtyPerPostomat) > p.available).length} позиціях`}
-          color="amber"
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>}
         />
         <StatsCard
           title="Одиниць / компл."
@@ -337,6 +310,13 @@ export default function WorkPlanCalculator({ positions }: Props) {
           sub={`у ${positions.filter(p => p.qtyPerPostomat > 0).length} позиціях`}
           color="slate"
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>}
+        />
+        <StatsCard
+          title="Працівників"
+          value={workers}
+          sub={`по ${planPerWorker} шт кожен`}
+          color="violet"
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
         />
       </div>
 
