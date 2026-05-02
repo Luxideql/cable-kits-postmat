@@ -40,12 +40,24 @@ function Stepper({ label, sub, value, onChange }: {
 type Task = { lengthMm: number; posId: string; qty: number };
 
 function distribute(positions: PositionRow[], workers: number, planPerWorker: number, targetKits: number): Task[][] {
-  // Deficit per position: how many units are still missing to reach targetKits
-  const needed = positions
+  const active = positions.filter(p => p.qtyPerPostomat > 0);
+  const totalCapacity = workers * planPerWorker;
+  const unitsPerKit   = active.reduce((s, p) => s + p.qtyPerPostomat, 0);
+
+  // Pass 1: deficit — what each position still needs to reach targetKits
+  const deficits = active.map(p => ({
+    id: p.id, lengthMm: p.lengthMm, qtyPerPostomat: p.qtyPerPostomat,
+    needed: Math.max(0, Math.ceil(targetKits * p.qtyPerPostomat) - p.available),
+  }));
+  const totalDeficit = deficits.reduce((s, p) => s + p.needed, 0);
+
+  // Pass 2: remaining capacity → distribute proportionally across positions (buffer stock)
+  const spare = Math.max(0, totalCapacity - totalDeficit);
+
+  const needed = deficits
     .map(p => ({
-      id: p.id,
-      lengthMm: p.lengthMm,
-      needed: Math.max(0, Math.ceil(targetKits * p.qtyPerPostomat) - p.available),
+      id: p.id, lengthMm: p.lengthMm,
+      needed: p.needed + (unitsPerKit > 0 ? Math.round(spare * (p.qtyPerPostomat / unitsPerKit)) : 0),
     }))
     .filter(p => p.needed > 0)
     .sort((a, b) => b.needed - a.needed);
