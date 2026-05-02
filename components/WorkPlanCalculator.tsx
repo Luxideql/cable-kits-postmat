@@ -40,16 +40,13 @@ function Stepper({ label, sub, value, onChange }: {
 type Task = { lengthMm: number; posId: string; qty: number };
 
 function distribute(positions: PositionRow[], workers: number, planPerWorker: number, totalKits: number): Task[][] {
-  // Calculate needed per position
   const needed = positions
     .map(p => ({ id: p.id, lengthMm: p.lengthMm, needed: Math.ceil(totalKits * p.qtyPerPostomat) }))
     .filter(p => p.needed > 0)
-    .sort((a, b) => b.needed - a.needed); // largest first
+    .sort((a, b) => b.needed - a.needed);
 
   const workerTasks: Task[][] = Array.from({ length: workers }, () => []);
   const workerLoad = Array(workers).fill(0);
-
-  // Queue of positions with remaining units
   const queue = needed.map(p => ({ ...p, remaining: p.needed }));
 
   let wIdx = 0;
@@ -63,7 +60,6 @@ function distribute(positions: PositionRow[], workers: number, planPerWorker: nu
     const assign = Math.min(pos.remaining, capacity);
 
     if (assign > 0) {
-      // Merge with existing task for same position if already in this worker's list
       const existing = workerTasks[wIdx].find(t => t.posId === pos.id);
       if (existing) existing.qty += assign;
       else workerTasks[wIdx].push({ lengthMm: pos.lengthMm, posId: pos.id, qty: assign });
@@ -79,6 +75,155 @@ function distribute(positions: PositionRow[], workers: number, planPerWorker: nu
   return workerTasks;
 }
 
+const PrintIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 6 2 18 2 18 9"/>
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+    <rect x="6" y="14" width="12" height="8"/>
+  </svg>
+);
+
+function PrintModal({
+  workerTasks, workerNames, today, onClose,
+}: {
+  workerTasks: Task[][];
+  workerNames: string[];
+  today: string;
+  onClose: () => void;
+}) {
+  function handlePrint() {
+    window.print();
+  }
+
+  return (
+    <>
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #wplan-print, #wplan-print * { visibility: visible !important; }
+          #wplan-print {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            background: white !important;
+          }
+        }
+      `}</style>
+
+      <div className="fixed inset-0 z-[100] flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-6 py-3 shrink-0"
+             style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+          <p style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>
+            Попередній перегляд · {today}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '13px', color: '#6b7280', cursor: 'pointer', background: 'none', border: 'none' }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f3f4f6')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              Закрити
+            </button>
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1.5"
+              style={{ padding: '6px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#fff', backgroundColor: '#4f46e5', border: 'none', cursor: 'pointer' }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#4338ca')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#4f46e5')}
+            >
+              <PrintIcon />
+              Друкувати
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable A4 preview */}
+        <div className="flex-1 overflow-y-auto p-6" style={{ backgroundColor: '#e5e7eb' }}>
+          <div
+            id="wplan-print"
+            style={{ maxWidth: '794px', margin: '0 auto', backgroundColor: '#fff', boxShadow: '0 4px 24px rgba(0,0,0,0.18)' }}
+          >
+            {workerTasks.map((tasks, i) => {
+              const workerTotal = tasks.reduce((s, t) => s + t.qty, 0);
+              const name = workerNames[i]?.trim() || `Працівник ${i + 1}`;
+              const isLast = i === workerTasks.length - 1;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    padding: '28px 36px',
+                    borderBottom: isLast ? 'none' : '2px dashed #d1d5db',
+                    pageBreakInside: 'avoid',
+                    breakInside: 'avoid',
+                  }}
+                >
+                  {/* Header row */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                    <div>
+                      <p style={{ fontSize: '24px', fontWeight: 800, color: '#111827', margin: 0, lineHeight: 1.1 }}>{name}</p>
+                      <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>{today}</p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Загальний план</p>
+                      <p style={{ fontSize: '38px', fontWeight: 800, color: '#4f46e5', margin: 0, lineHeight: 1 }}>{workerTotal}</p>
+                      <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>одиниць</p>
+                    </div>
+                  </div>
+
+                  {/* Tasks table */}
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                        <th style={{ textAlign: 'left', padding: '8px 0', fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                          Позиція
+                        </th>
+                        <th style={{ textAlign: 'right', padding: '8px 0', fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                          Кількість
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tasks.length === 0 ? (
+                        <tr>
+                          <td colSpan={2} style={{ padding: '14px 0', fontSize: '13px', color: '#9ca3af' }}>Завдань немає</td>
+                        </tr>
+                      ) : tasks.map(t => (
+                        <tr key={t.posId} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                          <td style={{ padding: '11px 0', fontSize: '17px', color: '#374151', fontWeight: 500 }}>{t.lengthMm} мм</td>
+                          <td style={{ padding: '11px 0', textAlign: 'right', fontSize: '22px', fontWeight: 800, color: '#111827' }}>{t.qty} шт</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: '2px solid #e5e7eb' }}>
+                        <td style={{ padding: '10px 0', fontSize: '12px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                          Разом
+                        </td>
+                        <td style={{ padding: '10px 0', textAlign: 'right', fontSize: '22px', fontWeight: 800, color: '#4f46e5' }}>
+                          {workerTotal} шт
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+
+                  {/* Signature line */}
+                  <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px dashed #d1d5db', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#9ca3af' }}>
+                    <span>Підпис: _________________________</span>
+                    <span>Виконано: _______ шт &nbsp;·&nbsp; ___.___.______</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function WorkPlanCalculator({ positions }: Props) {
   const saved = useMemo(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY) ?? 'null'); } catch { return null; }
@@ -86,10 +231,27 @@ export default function WorkPlanCalculator({ positions }: Props) {
 
   const [workers, setWorkers]             = useState<number>(saved?.workers ?? 3);
   const [planPerWorker, setPlanPerWorker] = useState<number>(saved?.planPerWorker ?? 40);
+  const [workerNames, setWorkerNames]     = useState<string[]>(
+    Array.from({ length: saved?.workers ?? 3 }, (_, i) => saved?.workerNames?.[i] ?? '')
+  );
+  const [showPrint, setShowPrint]         = useState(false);
+
+  // Keep names array in sync with workers count
+  useEffect(() => {
+    setWorkerNames(prev => {
+      if (prev.length === workers) return prev;
+      if (prev.length < workers) return [...prev, ...Array(workers - prev.length).fill('')];
+      return prev.slice(0, workers);
+    });
+  }, [workers]);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker }));
-  }, [workers, planPerWorker]);
+    localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, workerNames }));
+  }, [workers, planPerWorker, workerNames]);
+
+  const today = new Date().toLocaleDateString('uk-UA', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  });
 
   const unitsPerKit = positions.reduce((s, p) => s + p.qtyPerPostomat, 0);
   const totalUnits  = workers * planPerWorker;
@@ -100,12 +262,34 @@ export default function WorkPlanCalculator({ positions }: Props) {
     [positions, workers, planPerWorker, totalKits]
   );
 
+  function updateName(i: number, name: string) {
+    setWorkerNames(prev => {
+      const next = [...prev];
+      next[i] = name;
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-4">
 
       {/* Inputs */}
       <div className="card p-5">
-        <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4 mb-4">Параметри</p>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">Параметри</p>
+          <button
+            type="button"
+            onClick={() => setShowPrint(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium
+                       text-indigo-600 dark:text-indigo-400 transition-colors"
+            style={{ border: '1px solid var(--cbrd)' }}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+          >
+            <PrintIcon />
+            Друкувати
+          </button>
+        </div>
         <div className="flex flex-wrap gap-6 items-end">
           <Stepper label="Кількість працівників" value={workers} onChange={setWorkers} />
           <Stepper label="План на 1 прац. (шт)" value={planPerWorker} onChange={setPlanPerWorker} />
@@ -128,18 +312,28 @@ export default function WorkPlanCalculator({ positions }: Props) {
           return (
             <div key={i} className="card overflow-hidden">
               {/* Header */}
-              <div className="px-4 py-3 flex items-center justify-between"
+              <div className="px-4 py-3"
                    style={{ borderBottom: '1px solid var(--cbrd)', backgroundColor: 'var(--csr2)' }}>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold text-white
-                                  bg-gradient-to-br from-indigo-500 to-purple-600 shrink-0">
-                    {i + 1}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold text-white
+                                    bg-gradient-to-br from-indigo-500 to-purple-600 shrink-0">
+                      {i + 1}
+                    </div>
+                    <input
+                      type="text"
+                      value={workerNames[i] ?? ''}
+                      onChange={e => updateName(i, e.target.value)}
+                      placeholder={`Працівник ${i + 1}`}
+                      className="flex-1 min-w-0 bg-transparent text-[14px] font-semibold text-c1
+                                 outline-none placeholder:text-c4 placeholder:font-normal"
+                    />
                   </div>
-                  <span className="text-[14px] font-semibold text-c1">Працівник {i + 1}</span>
+                  <span className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums shrink-0 ml-2">
+                    {workerTotal} шт
+                  </span>
                 </div>
-                <span className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                  {workerTotal} шт
-                </span>
+                <p className="text-[11px] text-c4 mt-1 ml-9">{today}</p>
               </div>
 
               {/* Tasks */}
@@ -166,6 +360,16 @@ export default function WorkPlanCalculator({ positions }: Props) {
           );
         })}
       </div>
+
+      {/* Print modal */}
+      {showPrint && (
+        <PrintModal
+          workerTasks={workerTasks}
+          workerNames={workerNames}
+          today={today}
+          onClose={() => setShowPrint(false)}
+        />
+      )}
     </div>
   );
 }
