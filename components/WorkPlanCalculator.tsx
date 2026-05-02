@@ -288,29 +288,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
   return (
     <div className="space-y-4">
 
-      {/* Inputs */}
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">Параметри</p>
-          <button
-            type="button"
-            onClick={() => setShowPrint(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium
-                       text-indigo-600 dark:text-indigo-400 transition-colors"
-            style={{ border: '1px solid var(--cbrd)' }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
-          >
-            <PrintIcon />
-            Друкувати
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-6 items-end">
-          <Stepper label="Кількість працівників" value={workers} onChange={setWorkers} />
-          <Stepper label="План на 1 прац. (шт)" value={planPerWorker} onChange={setPlanPerWorker} />
-        </div>
-      </div>
-
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatsCard
@@ -341,6 +318,29 @@ export default function WorkPlanCalculator({ positions }: Props) {
           color="violet"
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
         />
+      </div>
+
+      {/* Inputs */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">Параметри</p>
+          <button
+            type="button"
+            onClick={() => setShowPrint(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium
+                       text-indigo-600 dark:text-indigo-400 transition-colors"
+            style={{ border: '1px solid var(--cbrd)' }}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+          >
+            <PrintIcon />
+            Друкувати
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-6 items-end">
+          <Stepper label="Кількість працівників" value={workers} onChange={setWorkers} />
+          <Stepper label="План на 1 прац. (шт)" value={planPerWorker} onChange={setPlanPerWorker} />
+        </div>
       </div>
 
       {/* Worker cards */}
