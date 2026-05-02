@@ -48,13 +48,15 @@ export default function WorkPlanCalculator({ positions }: Props) {
     localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker }));
   }, [workers, planPerWorker]);
 
-  const totalKits = workers * planPerWorker;
+  const totalUnits  = workers * planPerWorker;
+  const unitsPerKit = positions.reduce((s, p) => s + p.qtyPerPostomat, 0);
+  const totalKits   = unitsPerKit > 0 ? totalUnits / unitsPerKit : 0;
 
   // Per-position: how many units remain to be produced
   const posRemaining = positions.map(p => ({
     ...p,
-    needed:    totalKits * p.qtyPerPostomat,
-    remaining: Math.max(0, totalKits * p.qtyPerPostomat - p.available),
+    needed:    Math.round(totalKits * p.qtyPerPostomat),
+    remaining: Math.max(0, Math.round(totalKits * p.qtyPerPostomat) - p.available),
   }));
 
   const totalRemaining = posRemaining.reduce((s, p) => s + p.remaining, 0);
@@ -85,11 +87,11 @@ export default function WorkPlanCalculator({ positions }: Props) {
         <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4 mb-4">Параметри</p>
         <div className="flex flex-wrap gap-6 items-end">
           <Stepper label="Кількість працівників" value={workers} onChange={setWorkers} />
-          <Stepper label="План на 1 прац. (компл.)" value={planPerWorker} onChange={setPlanPerWorker} />
+          <Stepper label="План на 1 прац. (шт)" value={planPerWorker} onChange={setPlanPerWorker} />
           <div>
             <p className="text-[12px] font-medium text-c4 mb-1">Ціль</p>
-            <p className="text-[26px] font-semibold text-c1 leading-none tabular-nums">{totalKits} <span className="text-[14px] font-normal text-c4">компл.</span></p>
-            <p className="text-[11px] text-c4 mt-0.5">{workers} × {planPerWorker} = {totalKits}</p>
+            <p className="text-[26px] font-semibold text-c1 leading-none tabular-nums">{totalUnits} <span className="text-[14px] font-normal text-c4">шт</span></p>
+            <p className="text-[11px] text-c4 mt-0.5">≈ {Math.floor(totalKits)} компл. · {workers} × {planPerWorker}</p>
           </div>
           <div>
             <p className="text-[12px] font-medium text-c4 mb-1">Залишилось виготовити</p>
