@@ -12,10 +12,10 @@ type Props = {
   positions: PositionRow[];
 };
 
-const LS_KEY = 'workplan_v2';
+const LS_KEY = 'workplan_v3';
 
-function Stepper({ label, value, onChange }: {
-  label: string; value: number; onChange: (v: number) => void;
+function Stepper({ label, sub, value, onChange }: {
+  label: string; sub?: string; value: number; onChange: (v: number) => void;
 }) {
   return (
     <div>
@@ -32,13 +32,51 @@ function Stepper({ label, value, onChange }: {
           className="w-8 h-8 rounded-r-lg flex items-center justify-center text-c3 hover:text-c1 transition-colors text-[16px]"
           style={{ backgroundColor: 'var(--chov)', border: '1px solid var(--cbrd)', borderLeft: 'none' }}>+</button>
       </div>
+      {sub && <p className="text-[11px] text-c4 mt-1">{sub}</p>}
     </div>
   );
 }
 
-// Build default assignments: all workers assigned to all positions
-function defaultAssignments(posIds: string[], n: number): Record<string, number[]> {
-  return Object.fromEntries(posIds.map(id => [id, Array.from({ length: n }, (_, i) => i)]));
+type Task = { lengthMm: number; posId: string; qty: number };
+
+function distribute(positions: PositionRow[], workers: number, planPerWorker: number, totalKits: number): Task[][] {
+  // Calculate needed per position
+  const needed = positions
+    .map(p => ({ id: p.id, lengthMm: p.lengthMm, needed: Math.round(totalKits * p.qtyPerPostomat) }))
+    .filter(p => p.needed > 0)
+    .sort((a, b) => b.needed - a.needed); // largest first
+
+  const workerTasks: Task[][] = Array.from({ length: workers }, () => []);
+  const workerLoad = Array(workers).fill(0);
+
+  // Queue of positions with remaining units
+  const queue = needed.map(p => ({ ...p, remaining: p.needed }));
+
+  let wIdx = 0;
+  let qi   = 0;
+
+  while (wIdx < workers && qi < queue.length) {
+    const capacity = planPerWorker - workerLoad[wIdx];
+    if (capacity <= 0) { wIdx++; continue; }
+
+    const pos    = queue[qi];
+    const assign = Math.min(pos.remaining, capacity);
+
+    if (assign > 0) {
+      // Merge with existing task for same position if already in this worker's list
+      const existing = workerTasks[wIdx].find(t => t.posId === pos.id);
+      if (existing) existing.qty += assign;
+      else workerTasks[wIdx].push({ lengthMm: pos.lengthMm, posId: pos.id, qty: assign });
+
+      workerLoad[wIdx] += assign;
+      pos.remaining    -= assign;
+    }
+
+    if (pos.remaining === 0) qi++;
+    if (workerLoad[wIdx] >= planPerWorker) wIdx++;
+  }
+
+  return workerTasks;
 }
 
 export default function WorkPlanCalculator({ positions }: Props) {
@@ -48,65 +86,19 @@ export default function WorkPlanCalculator({ positions }: Props) {
 
   const [workers, setWorkers]             = useState<number>(saved?.workers ?? 3);
   const [planPerWorker, setPlanPerWorker] = useState<number>(saved?.planPerWorker ?? 40);
-  const [assignments, setAssignments]     = useState<Record<string, number[]>>(
-    () => saved?.assignments ?? defaultAssignments(positions.map(p => p.id), saved?.workers ?? 3)
-  );
-
-  // When workers count changes, reset assignments to include all workers
-  useEffect(() => {
-    setAssignments(defaultAssignments(positions.map(p => p.id), workers));
-  }, [workers, positions.length]);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, assignments }));
-  }, [workers, planPerWorker, assignments]);
+    localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker }));
+  }, [workers, planPerWorker]);
 
-  const totalUnits  = workers * planPerWorker;
   const unitsPerKit = positions.reduce((s, p) => s + p.qtyPerPostomat, 0);
+  const totalUnits  = workers * planPerWorker;
   const totalKits   = unitsPerKit > 0 ? totalUnits / unitsPerKit : 0;
 
-  function toggleAssignment(posId: string, workerIdx: number) {
-    setAssignments(prev => {
-      const current = prev[posId] ?? [];
-      const hasIt = current.includes(workerIdx);
-      if (hasIt && current.length === 1) return prev; // keep at least 1
-      const next = hasIt
-        ? current.filter(i => i !== workerIdx)
-        : [...current, workerIdx].sort((a, b) => a - b);
-      return { ...prev, [posId]: next };
-    });
-  }
-
-  // For each worker: find assigned positions, distribute planPerWorker proportionally
-  type Task = { lengthMm: number; posId: string; qty: number };
-  const workerTasks: Task[][] = Array.from({ length: workers }, (_, wIdx) => {
-    const myPositions = positions.filter(p =>
-      (assignments[p.id] ?? Array.from({ length: workers }, (_, i) => i)).includes(wIdx)
-    );
-    const sumQty = myPositions.reduce((s, p) => s + p.qtyPerPostomat, 0);
-    if (sumQty === 0) return [];
-
-    // Proportional allocation: each position gets planPerWorker × (qtyPerPostomat / sumQty)
-    const floats  = myPositions.map(p => planPerWorker * p.qtyPerPostomat / sumQty);
-    const floors  = floats.map(f => Math.floor(f));
-    const extras  = planPerWorker - floors.reduce((s, f) => s + f, 0);
-    // Distribute remainder to positions with largest fractional parts
-    const fracs   = floats.map((f, i) => ({ i, frac: f - floors[i] }))
-                          .sort((a, b) => b.frac - a.frac);
-    const qtys    = [...floors];
-    fracs.slice(0, extras).forEach(({ i }) => qtys[i]++);
-
-    return myPositions.map((p, i) => ({
-      lengthMm: p.lengthMm,
-      posId: p.id,
-      qty: qtys[i],
-    })).filter(t => t.qty > 0);
-  });
-
-  // For matrix: show per-worker qty for each position cell
-  function getCellQty(posId: string, wIdx: number): number {
-    return workerTasks[wIdx].find(t => t.posId === posId)?.qty ?? 0;
-  }
+  const workerTasks = useMemo(
+    () => distribute(positions, workers, planPerWorker, totalKits),
+    [positions, workers, planPerWorker, totalKits]
+  );
 
   return (
     <div className="space-y-4">
@@ -118,94 +110,14 @@ export default function WorkPlanCalculator({ positions }: Props) {
           <Stepper label="Кількість працівників" value={workers} onChange={setWorkers} />
           <Stepper label="План на 1 прац. (шт)" value={planPerWorker} onChange={setPlanPerWorker} />
           <div>
-            <p className="text-[12px] font-medium text-c4 mb-1">Ціль</p>
+            <p className="text-[12px] font-medium text-c4 mb-1">Загальна ціль</p>
             <p className="text-[26px] font-semibold text-c1 leading-none tabular-nums">
               {totalUnits} <span className="text-[14px] font-normal text-c4">шт</span>
             </p>
-            <p className="text-[11px] text-c4 mt-0.5">≈ {Math.floor(totalKits)} компл. · {workers} × {planPerWorker}</p>
+            <p className="text-[11px] text-c4 mt-0.5">
+              ≈ {Math.floor(totalKits)} компл. · {workers} × {planPerWorker}
+            </p>
           </div>
-        </div>
-      </div>
-
-      {/* Assignment matrix */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cbrd)' }}>
-          <div>
-            <h2 className="text-[15px] font-semibold text-c1">Розподіл позицій</h2>
-            <p className="text-[12px] text-c4 mt-0.5">Галочка — працівник виконує цю позицію</p>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
-                <th className="th text-left">Позиція</th>
-                {Array.from({ length: workers }, (_, i) => (
-                  <th key={i} className="th text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg text-[11px] font-bold text-white bg-gradient-to-br from-indigo-500 to-purple-600">
-                        {i + 1}
-                      </span>
-                      <span className="text-[10px] text-c4 font-normal normal-case tracking-normal">
-                        {workerTasks[i].reduce((s, t) => s + t.qty, 0)} шт
-                      </span>
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map((p, i) => {
-                const assigned = assignments[p.id] ?? Array.from({ length: workers }, (_, i) => i);
-                const isLast = i === positions.length - 1;
-                return (
-                  <tr key={p.id} className="row-hover"
-                      style={!isLast ? { borderBottom: '1px solid var(--cbrd)' } : {}}>
-                    <td className="px-5 py-3">
-                      <span className="text-[14px] font-semibold text-c1">{p.lengthMm} мм</span>
-                      <span className="text-[11px] text-c4 ml-2">{p.qtyPerPostomat} шт/компл.</span>
-                    </td>
-                    {Array.from({ length: workers }, (_, wIdx) => {
-                      const checked = assigned.includes(wIdx);
-                      const isOnly  = assigned.length === 1 && checked;
-                      const cellQty = getCellQty(p.id, wIdx);
-                      return (
-                        <td key={wIdx} className="px-3 py-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => toggleAssignment(p.id, wIdx)}
-                            title={isOnly ? 'Мінімум 1 працівник' : ''}
-                            className="flex flex-col items-center justify-center mx-auto rounded-xl px-2 py-1.5 min-w-[48px] transition-all duration-150"
-                            style={{
-                              backgroundColor: checked ? 'rgba(99,102,241,0.12)' : 'var(--chov)',
-                              border: `1.5px solid ${checked ? 'rgba(99,102,241,0.4)' : 'var(--cbrd)'}`,
-                              opacity: isOnly ? 0.5 : 1,
-                              cursor: isOnly ? 'not-allowed' : 'pointer',
-                            }}
-                          >
-                            {checked ? (
-                              <>
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                     stroke="rgb(99,102,241)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="20 6 9 17 4 12"/>
-                                </svg>
-                                <span className="text-[12px] font-bold tabular-nums mt-0.5"
-                                      style={{ color: 'rgb(99,102,241)' }}>
-                                  {cellQty}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-c4">—</span>
-                            )}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
         </div>
       </div>
 
@@ -215,11 +127,12 @@ export default function WorkPlanCalculator({ positions }: Props) {
           const workerTotal = tasks.reduce((s, t) => s + t.qty, 0);
           return (
             <div key={i} className="card overflow-hidden">
+              {/* Header */}
               <div className="px-4 py-3 flex items-center justify-between"
                    style={{ borderBottom: '1px solid var(--cbrd)', backgroundColor: 'var(--csr2)' }}>
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold text-white
-                                  bg-gradient-to-br from-indigo-500 to-purple-600">
+                                  bg-gradient-to-br from-indigo-500 to-purple-600 shrink-0">
                     {i + 1}
                   </div>
                   <span className="text-[14px] font-semibold text-c1">Працівник {i + 1}</span>
@@ -228,6 +141,8 @@ export default function WorkPlanCalculator({ positions }: Props) {
                   {workerTotal} шт
                 </span>
               </div>
+
+              {/* Tasks */}
               <div className="divide-y" style={{ borderColor: 'var(--cbrd)' }}>
                 {tasks.length === 0 ? (
                   <p className="px-4 py-3 text-[13px] text-c4">Завдань немає</p>
@@ -238,6 +153,8 @@ export default function WorkPlanCalculator({ positions }: Props) {
                   </div>
                 ))}
               </div>
+
+              {/* Footer */}
               <div className="px-4 py-2.5 flex items-center justify-between"
                    style={{ borderTop: '2px solid var(--cbrd)', backgroundColor: 'var(--csr2)' }}>
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Разом</span>
