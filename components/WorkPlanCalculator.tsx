@@ -1,6 +1,5 @@
 'use client';
 import { useState, useMemo, useEffect } from 'react';
-import StatsCard from '@/components/StatsCard';
 
 type PositionRow = {
   id: string;
@@ -308,36 +307,24 @@ export default function WorkPlanCalculator({ positions }: Props) {
   return (
     <div className="space-y-4">
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatsCard
-          title="Після виробітку"
-          value={unitsPerKit > 0 ? actualKits : '—'}
-          sub={unitsPerKit > 0 ? `склад ${stockKits} + додають ${additionalKits}` : 'немає позицій'}
-          color="indigo"
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>}
-        />
-        <StatsCard
-          title="Вже на складі"
-          value={unitsPerKit > 0 ? stockKits : '—'}
-          sub="готових комплектів зараз"
-          color="emerald"
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>}
-        />
-        <StatsCard
-          title="Треба доробити"
-          value={`${totalToMake} шт`}
-          sub={`дефіцит — до ${targetKits} компл.`}
-          color="amber"
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}
-        />
-        <StatsCard
-          title="Працівників"
-          value={workers}
-          sub={`по ${planPerWorker} шт кожен`}
-          color="violet"
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
-        />
+      {/* Summary bar */}
+      <div className="card px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Склад зараз</span>
+          <span className="text-[22px] font-bold text-c1 tabular-nums">{stockKits}</span>
+          <span className="text-[12px] text-c4">компл.</span>
+        </div>
+        <span className="text-c4 text-[18px] font-light">→</span>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Після виробітку</span>
+          <span className="text-[22px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{actualKits}</span>
+          <span className="text-[12px] text-c4">компл.</span>
+        </div>
+        <div className="ml-auto flex items-baseline gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Доробити</span>
+          <span className="text-[22px] font-bold text-amber-600 dark:text-amber-400 tabular-nums">{totalToMake}</span>
+          <span className="text-[12px] text-c4">шт</span>
+        </div>
       </div>
 
       {/* Inputs */}
