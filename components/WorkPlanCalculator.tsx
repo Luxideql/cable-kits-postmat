@@ -264,6 +264,19 @@ export default function WorkPlanCalculator({ positions }: Props) {
     [positions, workers, planPerWorker, totalKits]
   );
 
+  // Actual complete kits based on real distributed quantities per position
+  const actualKits = useMemo(() => {
+    const active = positions.filter(p => p.qtyPerPostomat > 0);
+    if (active.length === 0) return 0;
+    const allTasks = workerTasks.flat();
+    return Math.min(...active.map(p => {
+      const produced = allTasks
+        .filter(t => t.posId === p.id)
+        .reduce((s, t) => s + t.qty, 0);
+      return Math.floor(produced / p.qtyPerPostomat);
+    }));
+  }, [workerTasks, positions]);
+
   function updateName(i: number, name: string) {
     setWorkerNames(prev => {
       const next = [...prev];
@@ -301,9 +314,9 @@ export default function WorkPlanCalculator({ positions }: Props) {
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatsCard
-          title="Комплектів"
-          value={unitsPerKit > 0 ? Math.floor(totalKits) : '—'}
-          sub={unitsPerKit > 0 ? `${totalUnits} ÷ ${unitsPerKit} шт/компл.` : 'немає позицій'}
+          title="Готових комплектів"
+          value={unitsPerKit > 0 ? actualKits : '—'}
+          sub={unitsPerKit > 0 ? `з ${totalUnits} шт виробітку` : 'немає позицій'}
           color="indigo"
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>}
         />
