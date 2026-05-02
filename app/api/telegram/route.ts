@@ -73,7 +73,35 @@ async function handleMessage(msg: Update) {
 
     await sendMessage(
       chatId,
-      `✅ Записано!\n👷 <b>${empName}</b>\n📏 ${data.positionName}\n📦 <b>${qty} шт</b>`,
+      `✅ Записано!\n👷 <b>${empName}</b>\n📏 ${data.positionName}\n🔢 <b>${qty} шт</b>`,
+      { reply_markup: mainMenuKeyboard() }
+    );
+    return;
+  }
+
+  if (botState?.state === 'await_kits' && text && !isNaN(Number(text))) {
+    const kits = Number(text);
+    if (kits <= 0) {
+      await sendMessage(chatId, '❌ Кількість має бути більше 0. Введіть ще раз:');
+      return;
+    }
+    const data = JSON.parse(botState.data || '{}');
+    const qty = kits * (data.qtyPerPostomat ?? 1);
+    const empId = employee?.id ?? tgId;
+    const empName = employee?.fullName ?? 'Невідомий';
+
+    await addReportAndResetState({
+      date: getTodayDate(),
+      employeeId: empId,
+      positionId: data.positionId,
+      qty,
+      hours: 0,
+      comment: `${kits} компл.`,
+    }, tgId);
+
+    await sendMessage(
+      chatId,
+      `✅ Записано!\n👷 <b>${empName}</b>\n📏 ${data.positionName}\n📦 <b>${kits} компл.</b> = ${qty} шт`,
       { reply_markup: mainMenuKeyboard() }
     );
     return;
@@ -162,13 +190,44 @@ async function handleCallback(cb: Update) {
     const positions = await getPositions();
     const pos = positions.find(p => p.id === posId);
     const posName = pos ? `Кабель ${pos.lengthMm} мм` : posId;
+    const qtyPerPostomat = pos?.qtyPerPostomat ?? 1;
 
-    await setBotState(tgId, 'await_qty', JSON.stringify({ positionId: posId, positionName: posName }));
     await sendMessage(
       chatId,
-      `📏 <b>${posName}</b>\n\nВведіть кількість виготовлених штук:`,
-      { reply_markup: { remove_keyboard: true } }
+      `📏 <b>${posName}</b>\nна 1 комплект: ${qtyPerPostomat} шт\n\nЯк вводити виробіток?`,
+      {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '📦 Комплектами', callback_data: `mode|kits|${posId}` },
+            { text: '🔢 Штучно', callback_data: `mode|units|${posId}` },
+          ]],
+        },
+      }
     );
+  }
+
+  if (data.startsWith('mode|')) {
+    const [, inputMode, posId] = data.split('|');
+    const positions = await getPositions();
+    const pos = positions.find(p => p.id === posId);
+    const posName = pos ? `Кабель ${pos.lengthMm} мм` : posId;
+    const qtyPerPostomat = pos?.qtyPerPostomat ?? 1;
+
+    if (inputMode === 'kits') {
+      await setBotState(tgId, 'await_kits', JSON.stringify({ positionId: posId, positionName: posName, qtyPerPostomat }));
+      await sendMessage(
+        chatId,
+        `📦 <b>${posName}</b>\n1 компл. = ${qtyPerPostomat} шт\n\nВведіть кількість комплектів:`,
+        { reply_markup: { remove_keyboard: true } }
+      );
+    } else {
+      await setBotState(tgId, 'await_qty', JSON.stringify({ positionId: posId, positionName: posName }));
+      await sendMessage(
+        chatId,
+        `🔢 <b>${posName}</b>\n\nВведіть кількість виготовлених штук:`,
+        { reply_markup: { remove_keyboard: true } }
+      );
+    }
   }
 
   if (data.startsWith('emp:')) {
