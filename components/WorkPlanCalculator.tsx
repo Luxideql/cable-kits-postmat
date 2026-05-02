@@ -40,9 +40,14 @@ function Stepper({ label, sub, value, onChange }: {
 
 type Task = { lengthMm: number; posId: string; qty: number };
 
-function distribute(positions: PositionRow[], workers: number, planPerWorker: number, totalKits: number): Task[][] {
+function distribute(positions: PositionRow[], workers: number, planPerWorker: number, targetKits: number): Task[][] {
+  // Deficit per position: how many units are still missing to reach targetKits
   const needed = positions
-    .map(p => ({ id: p.id, lengthMm: p.lengthMm, needed: Math.ceil(totalKits * p.qtyPerPostomat) }))
+    .map(p => ({
+      id: p.id,
+      lengthMm: p.lengthMm,
+      needed: Math.max(0, Math.ceil(targetKits * p.qtyPerPostomat) - p.available),
+    }))
     .filter(p => p.needed > 0)
     .sort((a, b) => b.needed - a.needed);
 
@@ -255,16 +260,26 @@ export default function WorkPlanCalculator({ positions }: Props) {
     day: '2-digit', month: '2-digit', year: 'numeric',
   });
 
-  const unitsPerKit = positions.reduce((s, p) => s + p.qtyPerPostomat, 0);
-  const totalUnits  = workers * planPerWorker;
-  const totalKits   = unitsPerKit > 0 ? totalUnits / unitsPerKit : 0;
+  const unitsPerKit    = positions.reduce((s, p) => s + p.qtyPerPostomat, 0);
+  const totalUnits     = workers * planPerWorker;
+  const additionalKits = unitsPerKit > 0 ? Math.floor(totalUnits / unitsPerKit) : 0;
+
+  // Complete kits already in stock (bottleneck = minimum across positions)
+  const stockKits = useMemo(() => {
+    const active = positions.filter(p => p.qtyPerPostomat > 0);
+    if (active.length === 0) return 0;
+    return Math.min(...active.map(p => Math.floor(p.available / p.qtyPerPostomat)));
+  }, [positions]);
+
+  // Target = stock kits + what workers will add
+  const targetKits = stockKits + additionalKits;
 
   const workerTasks = useMemo(
-    () => distribute(positions, workers, planPerWorker, totalKits),
-    [positions, workers, planPerWorker, totalKits]
+    () => distribute(positions, workers, planPerWorker, targetKits),
+    [positions, workers, planPerWorker, targetKits]
   );
 
-  // Actual complete kits based on real distributed quantities per position
+  // Complete kits after workers finish (stock + production per position)
   const actualKits = useMemo(() => {
     const active = positions.filter(p => p.qtyPerPostomat > 0);
     if (active.length === 0) return 0;
@@ -273,9 +288,14 @@ export default function WorkPlanCalculator({ positions }: Props) {
       const produced = allTasks
         .filter(t => t.posId === p.id)
         .reduce((s, t) => s + t.qty, 0);
-      return Math.floor(produced / p.qtyPerPostomat);
+      return Math.floor((p.available + produced) / p.qtyPerPostomat);
     }));
   }, [workerTasks, positions]);
+
+  // Total units workers actually need to produce (sum of deficits)
+  const totalToMake = positions
+    .filter(p => p.qtyPerPostomat > 0)
+    .reduce((s, p) => s + Math.max(0, Math.ceil(targetKits * p.qtyPerPostomat) - p.available), 0);
 
   function updateName(i: number, name: string) {
     setWorkerNames(prev => {
@@ -291,18 +311,25 @@ export default function WorkPlanCalculator({ positions }: Props) {
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatsCard
-          title="Готових комплектів"
+          title="Після виробітку"
           value={unitsPerKit > 0 ? actualKits : '—'}
-          sub={unitsPerKit > 0 ? `з ${totalUnits} шт виробітку` : 'немає позицій'}
+          sub={unitsPerKit > 0 ? `склад ${stockKits} + додають ${additionalKits}` : 'немає позицій'}
           color="indigo"
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>}
         />
         <StatsCard
-          title="Загальний план"
-          value={`${totalUnits} шт`}
-          sub={`${workers} прац. × ${planPerWorker} шт`}
+          title="Вже на складі"
+          value={unitsPerKit > 0 ? stockKits : '—'}
+          sub="готових комплектів зараз"
           color="emerald"
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>}
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>}
+        />
+        <StatsCard
+          title="Треба доробити"
+          value={`${totalToMake} шт`}
+          sub={`дефіцит — до ${targetKits} компл.`}
+          color="amber"
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}
         />
         <StatsCard
           title="Одиниць / компл."
