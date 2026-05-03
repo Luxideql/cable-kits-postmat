@@ -275,6 +275,14 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const unitsPerKit = positions.filter(p => p.qtyPerPostomat > 0).reduce((s, p) => s + p.qtyPerPostomat, 0);
   const kitsFromProduction = unitsPerKit > 0 ? Math.floor(totalUnits / unitsPerKit) : 0;
 
+  const stockKits = useMemo(() => {
+    const active = positions.filter(p => p.qtyPerPostomat > 0);
+    if (active.length === 0) return 0;
+    return Math.min(...active.map(p => Math.floor(p.available / p.qtyPerPostomat)));
+  }, [positions]);
+
+  const totalKits = stockKits + kitsFromProduction;
+
   const workerTasks = useMemo(
     () => distribute(positions, workers, planPerWorker),
     [positions, workers, planPerWorker]
@@ -292,7 +300,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
     <div className="space-y-4">
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatsCard
           title="Загальний виробіток"
           value={`${totalUnits} шт`}
@@ -315,6 +323,17 @@ export default function WorkPlanCalculator({ positions }: Props) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
               <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+          }
+        />
+        <StatsCard
+          title="Разом зі складом"
+          value={totalKits}
+          sub={`склад ${stockKits} + виробіток ${kitsFromProduction}`}
+          color="violet"
+          icon={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
             </svg>
           }
         />
