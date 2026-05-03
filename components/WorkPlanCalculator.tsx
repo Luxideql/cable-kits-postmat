@@ -1,5 +1,6 @@
 'use client';
 import { useState, useMemo, useEffect } from 'react';
+import StatsCard from './StatsCard';
 
 type PositionRow = {
   id: string;
@@ -39,35 +40,35 @@ function Stepper({ label, sub, value, onChange }: {
 
 type Task = { lengthMm: number; posId: string; qty: number };
 
-function distribute(positions: PositionRow[], workers: number, planPerWorker: number, targetKits: number): Task[][] {
+function distribute(positions: PositionRow[], workers: number, planPerWorker: number): Task[][] {
   const active = positions.filter(p => p.qtyPerPostomat > 0);
   const totalCapacity = workers * planPerWorker;
   const unitsPerKit   = active.reduce((s, p) => s + p.qtyPerPostomat, 0);
 
-  // Pass 1: deficit — what each position still needs to reach targetKits
-  const deficits = active.map(p => ({
-    id: p.id, lengthMm: p.lengthMm, qtyPerPostomat: p.qtyPerPostomat,
-    needed: Math.max(0, Math.ceil(targetKits * p.qtyPerPostomat) - p.available),
-  }));
-  const totalDeficit = deficits.reduce((s, p) => s + p.needed, 0);
+  if (!active.length || !unitsPerKit || !totalCapacity)
+    return Array.from({ length: workers }, () => []);
 
-  // Pass 2: remaining capacity → distribute proportionally across positions (buffer stock)
-  const spare = Math.max(0, totalCapacity - totalDeficit);
+  // Hamilton's largest-remainder method: guarantees sum == totalCapacity exactly
+  const exact  = active.map(p => totalCapacity * p.qtyPerPostomat / unitsPerKit);
+  const floors = exact.map(Math.floor);
+  const remain = totalCapacity - floors.reduce((s, f) => s + f, 0);
 
-  const needed = deficits
-    .map(p => ({
-      id: p.id, lengthMm: p.lengthMm,
-      needed: p.needed + (unitsPerKit > 0 ? Math.round(spare * (p.qtyPerPostomat / unitsPerKit)) : 0),
-    }))
-    .filter(p => p.needed > 0)
-    .sort((a, b) => b.needed - a.needed);
+  const allocs = [...floors];
+  exact
+    .map((e, i) => ({ i, frac: e - floors[i] }))
+    .sort((a, b) => b.frac - a.frac)
+    .slice(0, remain)
+    .forEach(({ i }) => allocs[i]++);
+
+  // Sort DESC so the largest positions fill first
+  const queue = active
+    .map((p, i) => ({ id: p.id, lengthMm: p.lengthMm, remaining: allocs[i] }))
+    .filter(a => a.remaining > 0)
+    .sort((a, b) => b.remaining - a.remaining);
 
   const workerTasks: Task[][] = Array.from({ length: workers }, () => []);
   const workerLoad = Array(workers).fill(0);
-  const queue = needed.map(p => ({ ...p, remaining: p.needed }));
-
-  let wIdx = 0;
-  let qi   = 0;
+  let wIdx = 0, qi = 0;
 
   while (wIdx < workers && qi < queue.length) {
     const capacity = planPerWorker - workerLoad[wIdx];
@@ -80,7 +81,6 @@ function distribute(positions: PositionRow[], workers: number, planPerWorker: nu
       const existing = workerTasks[wIdx].find(t => t.posId === pos.id);
       if (existing) existing.qty += assign;
       else workerTasks[wIdx].push({ lengthMm: pos.lengthMm, posId: pos.id, qty: assign });
-
       workerLoad[wIdx] += assign;
       pos.remaining    -= assign;
     }
@@ -271,23 +271,11 @@ export default function WorkPlanCalculator({ positions }: Props) {
     day: '2-digit', month: '2-digit', year: 'numeric',
   });
 
-  const unitsPerKit    = positions.reduce((s, p) => s + p.qtyPerPostomat, 0);
-  const totalUnits     = workers * planPerWorker;
-  const additionalKits = unitsPerKit > 0 ? Math.floor(totalUnits / unitsPerKit) : 0;
-
-  // Complete kits already in stock (bottleneck = minimum across positions)
-  const stockKits = useMemo(() => {
-    const active = positions.filter(p => p.qtyPerPostomat > 0);
-    if (active.length === 0) return 0;
-    return Math.min(...active.map(p => Math.floor(p.available / p.qtyPerPostomat)));
-  }, [positions]);
-
-  // Target = stock kits + what workers will add
-  const targetKits = stockKits + additionalKits;
+  const totalUnits = workers * planPerWorker;
 
   const workerTasks = useMemo(
-    () => distribute(positions, workers, planPerWorker, targetKits),
-    [positions, workers, planPerWorker, targetKits]
+    () => distribute(positions, workers, planPerWorker),
+    [positions, workers, planPerWorker]
   );
 
   // Complete kits after workers finish (stock + production per position)
@@ -303,11 +291,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
     }));
   }, [workerTasks, positions]);
 
-  // Total units workers actually need to produce (sum of deficits)
-  const totalToMake = positions
-    .filter(p => p.qtyPerPostomat > 0)
-    .reduce((s, p) => s + Math.max(0, Math.ceil(targetKits * p.qtyPerPostomat) - p.available), 0);
-
   function updateName(i: number, name: string) {
     setWorkerNames(prev => {
       const next = [...prev];
@@ -319,24 +302,33 @@ export default function WorkPlanCalculator({ positions }: Props) {
   return (
     <div className="space-y-4">
 
-      {/* Summary bar */}
-      <div className="card px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Склад зараз</span>
-          <span className="text-[22px] font-bold text-c1 tabular-nums">{stockKits}</span>
-          <span className="text-[12px] text-c4">компл.</span>
-        </div>
-        <span className="text-c4 text-[18px] font-light">→</span>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Після виробітку</span>
-          <span className="text-[22px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{actualKits}</span>
-          <span className="text-[12px] text-c4">компл.</span>
-        </div>
-        <div className="ml-auto flex items-baseline gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Доробити</span>
-          <span className="text-[22px] font-bold text-amber-600 dark:text-amber-400 tabular-nums">{totalToMake}</span>
-          <span className="text-[12px] text-c4">шт</span>
-        </div>
+      {/* Stats cards */}
+      <div className="grid grid-cols-2 gap-3">
+        <StatsCard
+          title="Загальний виробіток"
+          value={`${totalUnits} шт`}
+          sub={`${workers} прац. × ${planPerWorker} шт`}
+          color="emerald"
+          icon={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          }
+        />
+        <StatsCard
+          title="Готових комплектів"
+          value={actualKits}
+          sub="після виробітку"
+          color="indigo"
+          icon={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+          }
+        />
       </div>
 
       {/* Inputs */}
