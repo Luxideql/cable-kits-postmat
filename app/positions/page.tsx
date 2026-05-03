@@ -26,9 +26,7 @@ export default async function PositionsPage() {
   const totalStock            = stats.positions.reduce((s,p) => s + p.stock, 0);
   const totalProduced         = stats.positions.reduce((s,p) => s + p.produced, 0);
   const totalAvailable        = stats.positions.reduce((s,p) => s + p.available, 0);
-  const totalAvailNotShipped  = stats.positions.reduce((s, p) => {
-    return s + Math.max(0, p.available - shipped * p.qtyPerPostomat);
-  }, 0);
+  const totalAvailNotShipped  = stats.positions.reduce((s, p) => s + p.available, 0);
 
   return (
     <div className="space-y-5 animate-fade-up">

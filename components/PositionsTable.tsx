@@ -120,7 +120,7 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
           <tbody>
             {sorted.map((p, idx) => {
               const isBottleneck = p.kits === minKits && p.kits >= 0;
-              const readyNow = Math.max(0, p.kits - shipped);
+              const readyNow = p.kits;
               const isLast = idx === sorted.length - 1;
               const actual = getActual(p);
               return (
