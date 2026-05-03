@@ -63,12 +63,22 @@ export async function sheetAppend(range: string, row: Row): Promise<void> {
   });
 }
 
-// Update specific cells
+// Update specific cells (raw values)
 export async function sheetUpdate(range: string, rows: Row[]): Promise<void> {
   await client().spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range,
     valueInputOption: 'RAW',
+    requestBody: { values: rows },
+  });
+}
+
+// Update cells with formula support (USER_ENTERED parses formulas)
+export async function sheetUpdateFormula(range: string, rows: Row[]): Promise<void> {
+  await client().spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range,
+    valueInputOption: 'USER_ENTERED',
     requestBody: { values: rows },
   });
 }
