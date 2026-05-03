@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { PositionStats } from '@/lib/types';
 import ColInfo from '@/components/ColInfo';
 
@@ -16,6 +16,11 @@ const SortIcon = ({ active, asc }: { active: boolean; asc: boolean }) => (
 export default function PositionsTable({ positions, shipped = 0 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('kits');
   const [sortAsc, setSortAsc]  = useState(false);
+  const [editingId, setEditingId]   = useState<string | null>(null);
+  const [editValue, setEditValue]   = useState('');
+  const [stockMap, setStockMap]     = useState<Record<string, number>>({});
+  const [saving, setSaving]         = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const minKits = positions.length ? Math.min(...positions.map(p => p.kits)) : 0;
   const sorted  = [...positions].sort((a, b) => {
@@ -27,6 +32,30 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
     if (sortKey === key) setSortAsc(a => !a);
     else { setSortKey(key); setSortAsc(false); }
   };
+
+  function startEdit(p: PositionStats) {
+    setEditingId(p.id);
+    setEditValue(String(stockMap[p.id] ?? p.stock));
+    setTimeout(() => inputRef.current?.select(), 0);
+  }
+
+  async function commitEdit(p: PositionStats) {
+    const val = parseInt(editValue);
+    if (isNaN(val) || val < 0) { setEditingId(null); return; }
+    if (val === (stockMap[p.id] ?? p.stock)) { setEditingId(null); return; }
+    setEditingId(null);
+    setSaving(p.id);
+    setStockMap(m => ({ ...m, [p.id]: val }));
+    try {
+      await fetch('/api/positions/stock', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id, stock: val }),
+      });
+    } finally {
+      setSaving(null);
+    }
+  }
 
   const TH = ({ k, label, align = 'left', info }: { k: SortKey; label: string; align?: string; info?: string }) => (
     <th
@@ -102,7 +131,31 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-[13px] font-mono text-c4">{p.cellNumbers || '—'}</td>
-                  <td className="px-4 py-3 text-right text-[14px] text-c3">{p.stock}</td>
+                  <td className="px-4 py-3 text-right" onClick={() => startEdit(p)} title="Натисніть щоб змінити залишок">
+                    {editingId === p.id ? (
+                      <input
+                        ref={inputRef}
+                        type="number"
+                        min={0}
+                        value={editValue}
+                        onChange={e => setEditValue(e.target.value)}
+                        onBlur={() => commitEdit(p)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') commitEdit(p);
+                          if (e.key === 'Escape') setEditingId(null);
+                        }}
+                        className="w-16 text-right text-[14px] font-semibold text-c1 bg-transparent outline-none
+                                   tabular-nums border-b-2 border-indigo-500"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className={`text-[14px] tabular-nums cursor-pointer select-none
+                        group-hover:underline group-hover:decoration-dotted
+                        ${saving === p.id ? 'text-indigo-400 animate-pulse' : 'text-c3'}`}>
+                        {stockMap[p.id] ?? p.stock}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <span className="text-[14px] font-medium text-emerald-600 dark:text-emerald-400">{p.produced}</span>
                   </td>
