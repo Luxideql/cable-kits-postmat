@@ -120,12 +120,18 @@ function PrintModal({
           body * { visibility: hidden !important; }
           #wplan-print, #wplan-print * { visibility: visible !important; }
           #wplan-print {
-            position: fixed !important;
+            position: absolute !important;
             top: 0 !important;
             left: 0 !important;
             width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
             background: white !important;
           }
+          .wplan-page { page-break-after: always !important; break-after: page !important; }
+          .wplan-page-last { page-break-after: avoid !important; break-after: avoid !important; }
         }
       `}</style>
 
@@ -174,13 +180,8 @@ function PrintModal({
               return (
                 <div
                   key={i}
-                  style={{
-                    padding: '28px 36px',
-                    pageBreakAfter: isLast ? 'auto' : 'always',
-                    breakAfter: isLast ? 'auto' : 'page',
-                    pageBreakInside: 'avoid',
-                    breakInside: 'avoid',
-                  }}
+                  className={isLast ? 'wplan-page-last' : 'wplan-page'}
+                  style={{ padding: '28px 36px', pageBreakInside: 'avoid', breakInside: 'avoid' }}
                 >
                   {/* Header row */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
