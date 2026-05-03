@@ -101,12 +101,13 @@ const PrintIcon = () => (
 );
 
 function PrintModal({
-  workerTasks, workerNames, today, onClose,
+  workerTasks, workerNames, today, onClose, workerIndex,
 }: {
   workerTasks: Task[][];
   workerNames: string[];
   today: string;
   onClose: () => void;
+  workerIndex?: number;
 }) {
   function handlePrint() {
     window.print();
@@ -163,10 +164,13 @@ function PrintModal({
             id="wplan-print"
             style={{ maxWidth: '794px', margin: '0 auto', backgroundColor: '#fff', boxShadow: '0 4px 24px rgba(0,0,0,0.18)' }}
           >
-            {workerTasks.map((tasks, i) => {
+            {workerTasks
+              .map((tasks, i) => ({ tasks, i }))
+              .filter(({ i }) => workerIndex === undefined || i === workerIndex)
+              .map(({ tasks, i }, arrIdx, arr) => {
               const workerTotal = tasks.reduce((s, t) => s + t.qty, 0);
               const name = workerNames[i]?.trim() || `Працівник ${i + 1}`;
-              const isLast = i === workerTasks.length - 1;
+              const isLast = arrIdx === arr.length - 1;
               return (
                 <div
                   key={i}
@@ -252,7 +256,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const [workerNames, setWorkerNames]     = useState<string[]>(
     Array.from({ length: saved?.workers ?? 3 }, (_, i) => saved?.workerNames?.[i] ?? '')
   );
-  const [showPrint, setShowPrint]         = useState(false);
+  const [printIndex, setPrintIndex] = useState<number | 'all' | null>(null);
 
   // Keep names array in sync with workers count
   useEffect(() => {
@@ -345,7 +349,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
           <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">Параметри</p>
           <button
             type="button"
-            onClick={() => setShowPrint(true)}
+            onClick={() => setPrintIndex('all')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium
                        text-indigo-600 dark:text-indigo-400 transition-colors"
             style={{ border: '1px solid var(--cbrd)' }}
@@ -409,9 +413,23 @@ export default function WorkPlanCalculator({ positions }: Props) {
               <div className="px-4 py-2.5 flex items-center justify-between"
                    style={{ borderTop: '2px solid var(--cbrd)', backgroundColor: 'var(--csr2)' }}>
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Разом</span>
-                <span className="text-[15px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                  {workerTotal} шт
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[15px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
+                    {workerTotal} шт
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPrintIndex(i)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium
+                               text-indigo-600 dark:text-indigo-400 transition-colors"
+                    style={{ border: '1px solid var(--cbrd)' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                  >
+                    <PrintIcon />
+                    Друк
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -419,12 +437,13 @@ export default function WorkPlanCalculator({ positions }: Props) {
       </div>
 
       {/* Print modal */}
-      {showPrint && (
+      {printIndex !== null && (
         <PrintModal
           workerTasks={workerTasks}
           workerNames={workerNames}
           today={today}
-          onClose={() => setShowPrint(false)}
+          workerIndex={printIndex === 'all' ? undefined : printIndex}
+          onClose={() => setPrintIndex(null)}
         />
       )}
     </div>
