@@ -272,24 +272,13 @@ export default function WorkPlanCalculator({ positions }: Props) {
   });
 
   const totalUnits = workers * planPerWorker;
+  const unitsPerKit = positions.filter(p => p.qtyPerPostomat > 0).reduce((s, p) => s + p.qtyPerPostomat, 0);
+  const kitsFromProduction = unitsPerKit > 0 ? Math.floor(totalUnits / unitsPerKit) : 0;
 
   const workerTasks = useMemo(
     () => distribute(positions, workers, planPerWorker),
     [positions, workers, planPerWorker]
   );
-
-  // Complete kits after workers finish (stock + production per position)
-  const actualKits = useMemo(() => {
-    const active = positions.filter(p => p.qtyPerPostomat > 0);
-    if (active.length === 0) return 0;
-    const allTasks = workerTasks.flat();
-    return Math.min(...active.map(p => {
-      const produced = allTasks
-        .filter(t => t.posId === p.id)
-        .reduce((s, t) => s + t.qty, 0);
-      return Math.floor((p.available + produced) / p.qtyPerPostomat);
-    }));
-  }, [workerTasks, positions]);
 
   function updateName(i: number, name: string) {
     setWorkerNames(prev => {
@@ -319,8 +308,8 @@ export default function WorkPlanCalculator({ positions }: Props) {
         />
         <StatsCard
           title="Готових комплектів"
-          value={actualKits}
-          sub="після виробітку"
+          value={kitsFromProduction}
+          sub={`з ${totalUnits} шт виробітку`}
           color="indigo"
           icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
