@@ -110,7 +110,69 @@ function PrintModal({
   workerIndex?: number;
 }) {
   function handlePrint() {
-    window.print();
+    const list = workerIndex !== undefined
+      ? [{ tasks: workerTasks[workerIndex], i: workerIndex }]
+      : workerTasks.map((tasks, i) => ({ tasks, i }));
+
+    const pagesHtml = list.map(({ tasks, i }, arrIdx) => {
+      const name = workerNames[i]?.trim() || `Працівник ${i + 1}`;
+      const total = tasks.reduce((s, t) => s + t.qty, 0);
+      const isLast = arrIdx === list.length - 1;
+      const rows = tasks.length === 0
+        ? `<tr><td colspan="2" style="padding:14px 0;font-size:13px;color:#9ca3af">Завдань немає</td></tr>`
+        : tasks.map(t => `
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:11px 0;font-size:17px;color:#374151;font-weight:500">${t.lengthMm} мм</td>
+              <td style="padding:11px 0;text-align:right;font-size:22px;font-weight:800;color:#111827">${t.qty} шт</td>
+            </tr>`).join('');
+
+      return `
+        <div style="padding:36px 48px;${!isLast ? 'page-break-after:always;break-after:page;' : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+            <div>
+              <div style="font-size:28px;font-weight:800;color:#111827;line-height:1.1">${name}</div>
+              <div style="font-size:13px;color:#6b7280;margin-top:4px">${today}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em">Загальний план</div>
+              <div style="font-size:44px;font-weight:800;color:#4f46e5;line-height:1">${total}</div>
+              <div style="font-size:13px;color:#6b7280">одиниць</div>
+            </div>
+          </div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:2px solid #e5e7eb">
+                <th style="text-align:left;padding:8px 0;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Позиція</th>
+                <th style="text-align:right;padding:8px 0;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Кількість</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+            <tfoot>
+              <tr style="border-top:2px solid #e5e7eb">
+                <td style="padding:10px 0;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em">Разом</td>
+                <td style="padding:10px 0;text-align:right;font-size:22px;font-weight:800;color:#4f46e5">${total} шт</td>
+              </tr>
+            </tfoot>
+          </table>
+          <div style="margin-top:24px;padding-top:14px;border-top:1px dashed #d1d5db;display:flex;justify-content:space-between;font-size:12px;color:#9ca3af">
+            <span>Підпис: _________________________</span>
+            <span>Виконано: _______ шт &nbsp;·&nbsp; ___.___.______</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: white; }
+        @media print { @page { size: A4; margin: 0; } }
+      </style>
+    </head><body>${pagesHtml}</body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); win.close(); }, 400);
   }
 
   return (
