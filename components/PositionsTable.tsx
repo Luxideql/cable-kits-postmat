@@ -13,13 +13,21 @@ const SortIcon = ({ active, asc }: { active: boolean; asc: boolean }) => (
   </svg>
 );
 
+const EditIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+       strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-40 ml-1 transition-opacity">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
+
 export default function PositionsTable({ positions, shipped = 0 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('kits');
   const [sortAsc, setSortAsc]  = useState(false);
-  const [editingId, setEditingId]   = useState<string | null>(null);
-  const [editValue, setEditValue]   = useState('');
-  const [stockMap, setStockMap]     = useState<Record<string, number>>({});
-  const [saving, setSaving]         = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [availMap, setAvailMap]   = useState<Record<string, number>>({});
+  const [saving, setSaving]       = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const minKits = positions.length ? Math.min(...positions.map(p => p.kits)) : 0;
@@ -33,24 +41,25 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
     else { setSortKey(key); setSortAsc(false); }
   };
 
+  function getActual(p: PositionStats) {
+    return availMap[p.id] ?? p.available;
+  }
+
   function startEdit(p: PositionStats) {
     setEditingId(p.id);
-    // Show actual physical count (available), not raw stored stock
-    const currentActual = stockMap[p.id] ?? Math.max(0, p.stock + p.produced - shipped * p.qtyPerPostomat);
-    setEditValue(String(currentActual));
+    setEditValue(String(getActual(p)));
     setTimeout(() => inputRef.current?.select(), 0);
   }
 
   async function commitEdit(p: PositionStats) {
-    const actualCount = parseInt(editValue);
-    if (isNaN(actualCount) || actualCount < 0) { setEditingId(null); return; }
-    const currentActual = stockMap[p.id] ?? Math.max(0, p.stock + p.produced - shipped * p.qtyPerPostomat);
-    if (actualCount === currentActual) { setEditingId(null); return; }
+    const entered = parseInt(editValue);
+    if (isNaN(entered) || entered < 0) { setEditingId(null); return; }
+    if (entered === getActual(p)) { setEditingId(null); return; }
     setEditingId(null);
     setSaving(p.id);
-    // Store entered actual count for display; back-calculate raw stock for Google Sheets
-    setStockMap(m => ({ ...m, [p.id]: actualCount }));
-    const stockToSave = actualCount - p.produced + shipped * p.qtyPerPostomat;
+    setAvailMap(m => ({ ...m, [p.id]: entered }));
+    // Back-calculate: available = stock + produced - shipped*qty → stock = entered - produced + shipped*qty
+    const stockToSave = entered - p.produced + shipped * p.qtyPerPostomat;
     try {
       await fetch('/api/positions/stock', {
         method: 'PATCH',
@@ -94,24 +103,18 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                   <ColInfo text="Номери комірок поштомату, куди вкладається цей кабель." />
                 </span>
               </th>
-              <TH k="stock"    label="Залишок"   align="right" info="Фактичний залишок на складі зараз. Натисніть щоб скоригувати — вводьте скільки штук фізично є на полиці прямо зараз." />
+              <TH k="stock"    label="Залишок"   align="right" info="Початковий залишок зі складу — введено вручну в Google Sheets." />
               <TH k="produced" label="Вироблено" align="right" info="Сума всіх звітів робітників через бот за весь час." />
-              <th className="th text-right">
-                <span className="inline-flex items-center gap-0.5">
-                  Разом
-                  <ColInfo text="Залишок + Вироблено = загальна кількість одиниць цієї позиції прямо зараз." />
-                </span>
-                <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">склад + вироблено</span>
-              </th>
-              <TH k="kits" label="Комплектів" align="right" info="floor(Разом ÷ К-сть/компл.) — скільки повних комплектів можна зібрати з цієї позиції." />
+              <TH k="available" label="Фактичний залишок" align="right"
+                info="Залишок + Вироблено − (відправлено × к-сть/компл.) = скільки штук реально є зараз. Натисніть щоб скоригувати після переобліку." />
+              <TH k="kits" label="Комплектів" align="right" info="floor(Фактичний залишок ÷ К-сть/компл.) — скільки повних комплектів можна зібрати." />
               <th className="th text-right">
                 <span className="inline-flex items-center gap-0.5">
                   Вільних компл.
-                  <ColInfo text="Комплектів − відправлено всього. Скільки комплектів цієї позиції ще не відвантажено." />
+                  <ColInfo text="Комплектів − відправлено всього. Скільки комплектів ще не відвантажено." />
                 </span>
-                <span className="block text-[10px] font-normal text-c4 mt-0.5 normal-case tracking-normal">компл. − відправлено</span>
               </th>
-              <TH k="progress" label="Прогрес" info="Виконання плану в %: Разом ÷ (план × к-сть/компл.) × 100." />
+              <TH k="progress" label="Прогрес" info="Виконання плану в %: Фактичний залишок ÷ (план × к-сть/компл.) × 100." />
             </tr>
           </thead>
           <tbody>
@@ -119,6 +122,7 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
               const isBottleneck = p.kits === minKits && p.kits >= 0;
               const readyNow = Math.max(0, p.kits - shipped);
               const isLast = idx === sorted.length - 1;
+              const actual = getActual(p);
               return (
                 <tr
                   key={p.id}
@@ -136,7 +140,13 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-[13px] font-mono text-c4">{p.cellNumbers || '—'}</td>
-                  <td className="px-4 py-3 text-right" onClick={() => startEdit(p)} title="Натисніть щоб скоригувати фактичний залишок">
+                  <td className="px-4 py-3 text-right text-[14px] text-c3">{p.stock}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="text-[14px] font-medium text-emerald-600 dark:text-emerald-400">{p.produced}</span>
+                  </td>
+
+                  {/* Фактичний залишок — editable */}
+                  <td className="px-4 py-3 text-right cursor-pointer" onClick={() => startEdit(p)}>
                     {editingId === p.id ? (
                       <div className="flex flex-col items-end gap-0.5">
                         <input
@@ -154,20 +164,17 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                                      tabular-nums border-b-2 border-indigo-500"
                           onClick={e => e.stopPropagation()}
                         />
-                        <span className="text-[10px] text-indigo-400 whitespace-nowrap">фізично зараз</span>
+                        <span className="text-[10px] text-indigo-400">переоблік</span>
                       </div>
                     ) : (
-                      <span className={`text-[14px] tabular-nums cursor-pointer select-none
-                        group-hover:underline group-hover:decoration-dotted
-                        ${saving === p.id ? 'text-indigo-400 animate-pulse' : 'text-c3'}`}>
-                        {stockMap[p.id] ?? p.stock}
+                      <span className={`inline-flex items-center justify-end text-[14px] font-semibold tabular-nums
+                        ${saving === p.id ? 'text-indigo-400 animate-pulse' : 'text-c2'}`}>
+                        {actual}
+                        <EditIcon />
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-[14px] font-medium text-emerald-600 dark:text-emerald-400">{p.produced}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right text-[14px] font-semibold text-c2">{p.available}</td>
+
                   <td className="px-4 py-3 text-right">
                     <span className={`text-[15px] font-bold tabular-nums
                       ${isBottleneck ? 'text-red-600 dark:text-red-400' : 'text-c1'}`}>
