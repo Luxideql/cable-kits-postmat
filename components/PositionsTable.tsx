@@ -35,22 +35,27 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
 
   function startEdit(p: PositionStats) {
     setEditingId(p.id);
-    setEditValue(String(stockMap[p.id] ?? p.stock));
+    // Show actual physical count (available), not raw stored stock
+    const currentActual = stockMap[p.id] ?? Math.max(0, p.stock + p.produced - shipped * p.qtyPerPostomat);
+    setEditValue(String(currentActual));
     setTimeout(() => inputRef.current?.select(), 0);
   }
 
   async function commitEdit(p: PositionStats) {
-    const val = parseInt(editValue);
-    if (isNaN(val) || val < 0) { setEditingId(null); return; }
-    if (val === (stockMap[p.id] ?? p.stock)) { setEditingId(null); return; }
+    const actualCount = parseInt(editValue);
+    if (isNaN(actualCount) || actualCount < 0) { setEditingId(null); return; }
+    const currentActual = stockMap[p.id] ?? Math.max(0, p.stock + p.produced - shipped * p.qtyPerPostomat);
+    if (actualCount === currentActual) { setEditingId(null); return; }
     setEditingId(null);
     setSaving(p.id);
-    setStockMap(m => ({ ...m, [p.id]: val }));
+    // Store entered actual count for display; back-calculate raw stock for Google Sheets
+    setStockMap(m => ({ ...m, [p.id]: actualCount }));
+    const stockToSave = actualCount - p.produced + shipped * p.qtyPerPostomat;
     try {
       await fetch('/api/positions/stock', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: p.id, stock: val }),
+        body: JSON.stringify({ id: p.id, stock: stockToSave }),
       });
     } finally {
       setSaving(null);
@@ -89,7 +94,7 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                   <ColInfo text="Номери комірок поштомату, куди вкладається цей кабель." />
                 </span>
               </th>
-              <TH k="stock"    label="Залишок"   align="right" info="Початковий залишок на складі — введено вручну в Google Sheets." />
+              <TH k="stock"    label="Залишок"   align="right" info="Фактичний залишок на складі зараз. Натисніть щоб скоригувати — вводьте скільки штук фізично є на полиці прямо зараз." />
               <TH k="produced" label="Вироблено" align="right" info="Сума всіх звітів робітників через бот за весь час." />
               <th className="th text-right">
                 <span className="inline-flex items-center gap-0.5">
@@ -131,23 +136,26 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-[13px] font-mono text-c4">{p.cellNumbers || '—'}</td>
-                  <td className="px-4 py-3 text-right" onClick={() => startEdit(p)} title="Натисніть щоб змінити залишок">
+                  <td className="px-4 py-3 text-right" onClick={() => startEdit(p)} title="Натисніть щоб скоригувати фактичний залишок">
                     {editingId === p.id ? (
-                      <input
-                        ref={inputRef}
-                        type="number"
-                        min={0}
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        onBlur={() => commitEdit(p)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') commitEdit(p);
-                          if (e.key === 'Escape') setEditingId(null);
-                        }}
-                        className="w-16 text-right text-[14px] font-semibold text-c1 bg-transparent outline-none
-                                   tabular-nums border-b-2 border-indigo-500"
-                        onClick={e => e.stopPropagation()}
-                      />
+                      <div className="flex flex-col items-end gap-0.5">
+                        <input
+                          ref={inputRef}
+                          type="number"
+                          min={0}
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          onBlur={() => commitEdit(p)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') commitEdit(p);
+                            if (e.key === 'Escape') setEditingId(null);
+                          }}
+                          className="w-20 text-right text-[14px] font-semibold text-c1 bg-transparent outline-none
+                                     tabular-nums border-b-2 border-indigo-500"
+                          onClick={e => e.stopPropagation()}
+                        />
+                        <span className="text-[10px] text-indigo-400 whitespace-nowrap">фізично зараз</span>
+                      </div>
                     ) : (
                       <span className={`text-[14px] tabular-nums cursor-pointer select-none
                         group-hover:underline group-hover:decoration-dotted
