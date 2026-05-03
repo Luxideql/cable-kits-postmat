@@ -3,6 +3,10 @@ import { sheetGet, sheetUpdateFormula } from '@/lib/googleSheets';
 
 export const dynamic = 'force-dynamic';
 
+export async function GET() {
+  return POST();
+}
+
 export async function POST() {
   try {
     const rows = await sheetGet('Позиції!A:I');

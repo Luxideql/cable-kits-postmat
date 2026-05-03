@@ -1,5 +1,5 @@
 import {
-  sheetGet, sheetBatchGet, sheetAppend, sheetUpdate, sheetUpsert, sheetEnsure, rowsToObjects,
+  sheetGet, sheetBatchGet, sheetAppend, sheetUpdate, sheetUpdateFormula, sheetUpsert, sheetEnsure, rowsToObjects,
 } from './googleSheets';
 import { calcKitStats } from './calculations';
 import type { Employee, Position, ProductionPlan, DailyReport, KitStats, PositionStats, Shipment } from './types';
@@ -168,6 +168,22 @@ export async function addShipment(ship: Omit<Shipment, 'id'>): Promise<{ id: str
     id, ship.date || getTodayDate(), String(ship.qty), ship.comment ?? '',
   ]);
   return { id };
+}
+
+// ─── Sync actual stock column to Google Sheets (column J) ────────────────────
+
+export async function syncActualStockColumn(positions: PositionStats[], shipped: number): Promise<void> {
+  const rows = await sheetGet('Позиції!A:A');
+  if (rows.length < 2) return;
+
+  const updates: string[][] = [['фактичний_залишок']];
+  for (let i = 1; i < rows.length; i++) {
+    const posId = rows[i][0];
+    const pos = positions.find(p => p.id === posId);
+    const actual = pos ? Math.max(0, pos.stock + pos.produced - shipped * pos.qtyPerPostomat) : '';
+    updates.push([String(actual)]);
+  }
+  await sheetUpdate(`Позиції!J1:J${rows.length}`, updates);
 }
 
 // ─── Kit Stats (calculated in TS, not GAS) ────────────────────────────────────

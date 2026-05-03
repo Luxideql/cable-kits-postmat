@@ -1,6 +1,6 @@
 import PositionsTable from '@/components/PositionsTable';
 import InfoTooltip from '@/components/InfoTooltip';
-import { getKitStats, getShipments } from '@/lib/data';
+import { getKitStats, getShipments, syncActualStockColumn } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +10,7 @@ export default async function PositionsPage() {
   let error = '';
   try {
     const [s, shipments] = await Promise.all([getKitStats(), getShipments()]);
+    syncActualStockColumn(s.positions, shipments.reduce((a, r) => a + r.qty, 0)).catch(() => {});
     stats = s;
     shipped = shipments.reduce((acc, r) => acc + r.qty, 0);
   }
