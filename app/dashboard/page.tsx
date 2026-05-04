@@ -201,7 +201,7 @@ export default async function DashboardPage() {
         <SectionHeader title="Деталізація позицій" sub="Сортування по будь-якому стовпцю">
           <span className="text-[12px] text-c4">{kitStats.positions.length} позицій</span>
         </SectionHeader>
-        <PositionsTable positions={kitStats.positions} shipped={kitStats.shipped} />
+        <PositionsTable positions={kitStats.positions} />
       </div>
     </div>
   );
