@@ -67,22 +67,27 @@ function parsePosition(p: Record<string, string>): Position {
     qtyPerPostomat: Number(p['кількість_на_почтомат']),
     cellNumbers: p['номери_комірок'],
     stock: Number(p.залишок),
+    stockDate: p['дата_переобліку'] || '',
     type: p.тип,
     active: p.активний !== 'false',
   };
 }
 
 export async function getPositions(): Promise<Position[]> {
-  const rows = await sheetGet('Позиції!A:I');
+  const rows = await sheetGet('Позиції!A:K');
   return rowsToObjects(rows).filter(p => p.активний !== 'false').map(parsePosition);
 }
 
-export async function updatePositionStock(positionId: string, stock: number): Promise<void> {
-  const rows = await sheetGet('Позиції!A:I');
+export async function updatePositionStock(positionId: string, stock: number, stockDate?: string): Promise<void> {
+  const rows = await sheetGet('Позиції!A:K');
   const idx = rows.findIndex((r, i) => i > 0 && r[0] === positionId);
-  if (idx > 0) {
-    // column G (index 6) = залишок
-    await sheetUpdate(`Позиції!G${idx + 1}`, [[String(stock)]]);
+  if (idx < 1) return;
+  if (!rows[0]?.[10]) {
+    await sheetUpdate('Позиції!K1', [['дата_переобліку']]);
+  }
+  await sheetUpdate(`Позиції!G${idx + 1}`, [[String(stock)]]);
+  if (stockDate !== undefined) {
+    await sheetUpdate(`Позиції!K${idx + 1}`, [[stockDate]]);
   }
 }
 
@@ -172,7 +177,7 @@ export async function addShipment(ship: Omit<Shipment, 'id'>): Promise<{ id: str
 
 // ─── Sync actual stock column to Google Sheets (column J) ────────────────────
 
-export async function syncActualStockColumn(positions: PositionStats[], shipped: number): Promise<void> {
+export async function syncActualStockColumn(positions: PositionStats[]): Promise<void> {
   const rows = await sheetGet('Позиції!A:A');
   if (rows.length < 2) return;
 
@@ -180,8 +185,7 @@ export async function syncActualStockColumn(positions: PositionStats[], shipped:
   for (let i = 1; i < rows.length; i++) {
     const posId = rows[i][0];
     const pos = positions.find(p => p.id === posId);
-    const actual = pos ? Math.max(0, pos.stock + pos.produced - shipped * pos.qtyPerPostomat) : '';
-    updates.push([String(actual)]);
+    updates.push([pos ? String(pos.available) : '']);
   }
   await sheetUpdate(`Позиції!J1:J${rows.length}`, updates);
 }

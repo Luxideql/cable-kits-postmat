@@ -15,6 +15,7 @@ export interface Position {
   qtyPerPostomat: number;
   cellNumbers: string;
   stock: number;
+  stockDate: string; // дата останнього переобліку (YYYY-MM-DD), '' = ніколи
   type: string;
   active: boolean;
 }

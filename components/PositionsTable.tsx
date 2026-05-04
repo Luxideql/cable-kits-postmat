@@ -3,7 +3,7 @@ import { useState, useRef } from 'react';
 import type { PositionStats } from '@/lib/types';
 import ColInfo from '@/components/ColInfo';
 
-interface Props { positions: PositionStats[]; shipped?: number }
+interface Props { positions: PositionStats[] }
 type SortKey = 'lengthMm' | 'stock' | 'produced' | 'available' | 'kits' | 'progress';
 
 const SortIcon = ({ active, asc }: { active: boolean; asc: boolean }) => (
@@ -21,7 +21,7 @@ const EditIcon = () => (
   </svg>
 );
 
-export default function PositionsTable({ positions, shipped = 0 }: Props) {
+export default function PositionsTable({ positions }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('kits');
   const [sortAsc, setSortAsc]  = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
   };
 
   function getActual(p: PositionStats) {
-    return availMap[p.id] ?? p.available;
+    return availMap[p.id] ?? p.stock;
   }
 
   function startEdit(p: PositionStats) {
@@ -58,13 +58,12 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
     setEditingId(null);
     setSaving(p.id);
     setAvailMap(m => ({ ...m, [p.id]: entered }));
-    // Back-calculate: available = stock + produced - shipped*qty → stock = entered - produced + shipped*qty
-    const stockToSave = entered - p.produced + shipped * p.qtyPerPostomat;
+    const stockDate = new Date().toISOString().split('T')[0];
     try {
       await fetch('/api/positions/stock', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: p.id, stock: stockToSave }),
+        body: JSON.stringify({ id: p.id, stock: entered, stockDate }),
       });
     } finally {
       setSaving(null);
@@ -103,24 +102,20 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                   <ColInfo text="Номери комірок поштомату, куди вкладається цей кабель." />
                 </span>
               </th>
-              <TH k="stock"    label="Залишок"   align="right" info="Початковий залишок зі складу — введено вручну в Google Sheets." />
-              <TH k="produced" label="Вироблено" align="right" info="Сума всіх звітів робітників через бот за весь час." />
-              <TH k="available" label="Фактичний залишок" align="right"
-                info="Залишок + Вироблено − (відправлено × к-сть/компл.) = скільки штук реально є зараз. Натисніть щоб скоригувати після переобліку." />
-              <TH k="kits" label="Комплектів" align="right" info="floor(Фактичний залишок ÷ К-сть/компл.) — скільки повних комплектів можна зібрати." />
-              <th className="th text-right">
-                <span className="inline-flex items-center gap-0.5">
-                  Вільних компл.
-                  <ColInfo text="Комплектів − відправлено всього. Скільки комплектів ще не відвантажено." />
-                </span>
-              </th>
-              <TH k="progress" label="Прогрес" info="Виконання плану в %: Фактичний залишок ÷ (план × к-сть/компл.) × 100." />
+              <TH k="stock" label="Фактичний залишок" align="right"
+                info="Реальна кількість шт на складі на дату переобліку. Клікніть щоб ввести нове значення після фізичного підрахунку." />
+              <TH k="produced" label="Вироблено" align="right"
+                info="Сума звітів робітників через бот ПІСЛЯ дати переобліку по цій позиції." />
+              <TH k="available" label="Разом шт" align="right"
+                info="Фактичний залишок + Вироблено після переобліку = скільки шт є зараз." />
+              <TH k="kits" label="Комплектів" align="right"
+                info="floor(Разом шт ÷ К-сть/компл.) з урахуванням відвантажень після переобліку." />
+              <TH k="progress" label="Прогрес" info="Виконання плану в %: Разом шт ÷ (план × к-сть/компл.) × 100." />
             </tr>
           </thead>
           <tbody>
             {sorted.map((p, idx) => {
               const isBottleneck = p.kits === minKits && p.kits >= 0;
-              const readyNow = p.kits;
               const isLast = idx === sorted.length - 1;
               const actual = getActual(p);
               return (
@@ -140,12 +135,7 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-[13px] font-mono text-c4">{p.cellNumbers || '—'}</td>
-                  <td className="px-4 py-3 text-right text-[14px] text-c3">{p.stock}</td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-[14px] font-medium text-emerald-600 dark:text-emerald-400">{p.produced}</span>
-                  </td>
-
-                  {/* Фактичний залишок — editable */}
+                  {/* Фактичний залишок — editable (пряме введення, без зворотного розрахунку) */}
                   <td className="px-4 py-3 text-right cursor-pointer" onClick={() => startEdit(p)}>
                     {editingId === p.id ? (
                       <div className="flex flex-col items-end gap-0.5">
@@ -167,24 +157,29 @@ export default function PositionsTable({ positions, shipped = 0 }: Props) {
                         <span className="text-[10px] text-indigo-400">переоблік</span>
                       </div>
                     ) : (
-                      <span className={`inline-flex items-center justify-end text-[14px] font-semibold tabular-nums
-                        ${saving === p.id ? 'text-indigo-400 animate-pulse' : 'text-c2'}`}>
-                        {actual}
-                        <EditIcon />
-                      </span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className={`inline-flex items-center justify-end text-[14px] font-semibold tabular-nums
+                          ${saving === p.id ? 'text-indigo-400 animate-pulse' : 'text-c2'}`}>
+                          {actual}
+                          <EditIcon />
+                        </span>
+                        {p.stockDate && (
+                          <span className="text-[10px] text-c4 tabular-nums">{p.stockDate}</span>
+                        )}
+                      </div>
                     )}
                   </td>
+
+                  <td className="px-4 py-3 text-right">
+                    <span className="text-[14px] font-medium text-emerald-600 dark:text-emerald-400">{p.produced}</span>
+                  </td>
+
+                  <td className="px-4 py-3 text-right text-[14px] text-c3">{p.available}</td>
 
                   <td className="px-4 py-3 text-right">
                     <span className={`text-[15px] font-bold tabular-nums
                       ${isBottleneck ? 'text-red-600 dark:text-red-400' : 'text-c1'}`}>
                       {p.kits}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className={`text-[15px] font-bold tabular-nums
-                      ${readyNow === 0 ? 'text-c4' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                      {readyNow}
                     </span>
                   </td>
                   <td className="px-4 py-3 min-w-[140px]">

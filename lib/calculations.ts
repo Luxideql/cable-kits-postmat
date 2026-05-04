@@ -4,22 +4,30 @@ export function calcPositionStats(
   pos: Position,
   reports: DailyReport[],
   plan: ProductionPlan[],
-  shippedKits = 0
+  shipments: Shipment[] = []
 ): PositionStats {
+  const d = pos.stockDate || '';
+
+  // Якщо є дата переобліку — рахуємо тільки звіти та відвантаження ПІСЛЯ неї.
+  // Якщо дати немає — враховуємо всю історію (backward-compatible).
   const produced = reports
-    .filter(r => r.positionId === pos.id)
+    .filter(r => r.positionId === pos.id && (!d || r.date >= d))
     .reduce((s, r) => s + r.qty, 0);
 
-  // Subtract units consumed by shipped kits
+  const shippedKits = shipments
+    .filter(s => !d || s.date >= d)
+    .reduce((s, r) => s + r.qty, 0);
+
+  // stock = фактичний залишок на дату переобліку (або початковий ввід)
   const available = Math.max(0, pos.stock + produced - shippedKits * pos.qtyPerPostomat);
   const kits      = pos.qtyPerPostomat > 0 ? Math.floor(available / pos.qtyPerPostomat) : 0;
-  const leftover  = available - kits * pos.qtyPerPostomat; // штук, що не увійшли у повний комплект
+  const leftover  = available - kits * pos.qtyPerPostomat;
 
-  const planEntry   = plan.find(p => p.positionId === pos.id);
-  const planQty     = planEntry?.plannedQty ?? 0;          // план у комплектах
-  const planUnits   = planQty * pos.qtyPerPostomat;         // перевести в штуки
-  const remaining   = Math.max(0, planUnits - available);   // недостача в штуках
-  const progress    = planUnits > 0 ? Math.min(100, Math.round((available / planUnits) * 100)) : 0;
+  const planEntry = plan.find(p => p.positionId === pos.id);
+  const planQty   = planEntry?.plannedQty ?? 0;
+  const planUnits = planQty * pos.qtyPerPostomat;
+  const remaining = Math.max(0, planUnits - available);
+  const progress  = planUnits > 0 ? Math.min(100, Math.round((available / planUnits) * 100)) : 0;
 
   return { ...pos, produced, available, leftover, kits, remaining, planQty, progress };
 }
@@ -31,7 +39,7 @@ export function calcKitStats(
   shipments: Shipment[] = []
 ): KitStats {
   const shipped = shipments.reduce((s, r) => s + r.qty, 0);
-  const stats = positions.map(p => calcPositionStats(p, reports, plan, shipped));
+  const stats = positions.map(p => calcPositionStats(p, reports, plan, shipments));
   const active = stats.filter(s => s.qtyPerPostomat > 0);
 
   const totalKits = active.length > 0 ? Math.min(...active.map(s => s.kits)) : 0;

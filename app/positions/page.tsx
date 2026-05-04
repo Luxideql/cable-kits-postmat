@@ -10,7 +10,7 @@ export default async function PositionsPage() {
   let error = '';
   try {
     const [s, shipments] = await Promise.all([getKitStats(), getShipments()]);
-    syncActualStockColumn(s.positions, shipments.reduce((a, r) => a + r.qty, 0)).catch(() => {});
+    syncActualStockColumn(s.positions).catch(() => {});
     stats = s;
     shipped = shipments.reduce((acc, r) => acc + r.qty, 0);
   }
@@ -23,10 +23,9 @@ export default async function PositionsPage() {
   );
   if (!stats) return null;
 
-  const totalStock            = stats.positions.reduce((s,p) => s + p.stock, 0);
-  const totalProduced         = stats.positions.reduce((s,p) => s + p.produced, 0);
-  const totalAvailable        = stats.positions.reduce((s,p) => s + p.available, 0);
-  const totalAvailNotShipped  = stats.positions.reduce((s, p) => s + p.available, 0);
+  const totalStock    = stats.positions.reduce((s,p) => s + p.stock, 0);
+  const totalProduced = stats.positions.reduce((s,p) => s + p.produced, 0);
+  const totalAvailable = stats.positions.reduce((s,p) => s + p.available, 0);
 
   return (
     <div className="space-y-5 animate-fade-up">
@@ -39,24 +38,22 @@ export default async function PositionsPage() {
           {stats.bottleneck && <span className="badge-red">Вузьке: {stats.bottleneck.lengthMm} мм</span>}
           <span className="badge-slate">{stats.positions.length} позицій</span>
           <InfoTooltip>
-            <p><b>Залишок на складі</b> — початкові шт введені вручну в таблицю.</p>
-            <p><b>Вироблено</b> — сума всіх звітів робітників через бот.</p>
-            <p><b>Разом в шт</b> = Залишок + Вироблено.</p>
-            <p><b>Залишок в шт</b> = Разом − (відправлено × к-сть на компл.) — скільки шт ще не пішло у відправлені комплекти.</p>
-            <p><b>Мін. комплектів</b> — мінімум по всіх позиціях (обмежено вузьким місцем).</p>
-            <p className="pt-1" style={{borderTop:'1px solid var(--cbrd)'}}><b>Таблиця:</b> Залишок + Вироблено = Разом → ÷ к-сть/компл. = Комплектів → − відправлено = Вільних компл.</p>
+            <p><b>Фактичний залишок</b> — шт фізично на складі на дату переобліку (вводиться вручну).</p>
+            <p><b>Вироблено після переобліку</b> — звіти бота тільки після дати переобліку по кожній позиції.</p>
+            <p><b>Разом шт</b> = Фактичний залишок + Вироблено після переобліку.</p>
+            <p><b>Мін. комплектів</b> — мінімум по всіх позиціях з урахуванням відвантажень після переобліку.</p>
+            <p className="pt-1" style={{borderTop:'1px solid var(--cbrd)'}}><b>Таблиця:</b> Клікніть на "Фактичний залишок" щоб ввести реальну кількість після переобліку — дата фіксується автоматично.</p>
           </InfoTooltip>
         </div>
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Залишок на складі', value: totalStock,            sub: 'шт · початковий склад' },
-          { label: 'Вироблено',         value: totalProduced,         sub: 'шт · виробництво' },
-          { label: 'Разом в шт',        value: totalAvailable,        sub: 'склад + вироблено' },
-          { label: 'Залишок в шт',      value: totalAvailNotShipped,  sub: 'шт · не відвантажено' },
-          { label: 'Мін. комплектів',   value: stats.totalKits,       sub: 'мінімум по позиціях' },
+          { label: 'Фактичний залишок', value: totalStock,     sub: 'шт · на дату переобліку' },
+          { label: 'Вироблено',         value: totalProduced,  sub: 'шт · після переобліку' },
+          { label: 'Разом шт',          value: totalAvailable, sub: 'залишок + вироблено' },
+          { label: 'Мін. комплектів',   value: stats.totalKits, sub: 'мінімум по позиціях' },
         ].map(({label,value,sub}) => (
           <div key={label} className="card-hover p-3 sm:p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-2">{label}</p>
@@ -74,7 +71,7 @@ export default async function PositionsPage() {
         <p className="text-[12px] text-indigo-600 dark:text-indigo-400/70">Клікайте на заголовки для сортування</p>
       </div>
 
-      <PositionsTable positions={stats.positions} shipped={shipped} />
+      <PositionsTable positions={stats.positions} />
     </div>
   );
 }
