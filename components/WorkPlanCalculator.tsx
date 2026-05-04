@@ -43,26 +43,53 @@ type Task = { lengthMm: number; posId: string; qty: number };
 function distribute(positions: PositionRow[], workers: number, planPerWorker: number): Task[][] {
   const active = positions.filter(p => p.qtyPerPostomat > 0);
   const totalCapacity = workers * planPerWorker;
-  const unitsPerKit   = active.reduce((s, p) => s + p.qtyPerPostomat, 0);
 
-  if (!active.length || !unitsPerKit || !totalCapacity)
+  if (!active.length || !totalCapacity)
     return Array.from({ length: workers }, () => []);
 
-  // Hamilton's largest-remainder method: guarantees sum == totalCapacity exactly
-  const exact  = active.map(p => totalCapacity * p.qtyPerPostomat / unitsPerKit);
-  const floors = exact.map(Math.floor);
-  const remain = totalCapacity - floors.reduce((s, f) => s + f, 0);
+  // Deficit-based allocation: fill bottleneck positions first to maximise complete kits.
+  // Each iteration: find the position(s) with fewest kits, fill them to the next level.
+  const allocMap = new Map(active.map(p => [p.id, 0]));
+  const vAvail   = new Map(active.map(p => [p.id, p.available])); // virtual available
+  let cap = totalCapacity;
 
-  const allocs = [...floors];
-  exact
-    .map((e, i) => ({ i, frac: e - floors[i] }))
-    .sort((a, b) => b.frac - a.frac)
-    .slice(0, remain)
-    .forEach(({ i }) => allocs[i]++);
+  while (cap > 0) {
+    const kitsNow  = active.map(p => Math.floor(vAvail.get(p.id)! / p.qtyPerPostomat));
+    const minKits  = Math.min(...kitsNow);
+    const bottlenecks = active.filter((_, i) => kitsNow[i] === minKits);
 
-  // Sort DESC so the largest positions fill first
+    // Units each bottleneck needs to reach minKits+1
+    const needs = bottlenecks.map(p => Math.max(0, (minKits + 1) * p.qtyPerPostomat - vAvail.get(p.id)!));
+    const batchTotal = needs.reduce((s, n) => s + n, 0);
+
+    if (batchTotal === 0) break; // all positions already balanced, nothing left to fill
+
+    if (batchTotal <= cap) {
+      // Fill all bottlenecks to the next kit level
+      bottlenecks.forEach((p, i) => {
+        allocMap.set(p.id, allocMap.get(p.id)! + needs[i]);
+        vAvail.set(p.id, (minKits + 1) * p.qtyPerPostomat);
+      });
+      cap -= batchTotal;
+    } else {
+      // Partial fill: distribute cap among bottlenecks weighted by qtyPerPostomat (Hamilton)
+      const totalQty = bottlenecks.reduce((s, p) => s + p.qtyPerPostomat, 0);
+      const exact  = bottlenecks.map(p => cap * p.qtyPerPostomat / totalQty);
+      const floors = exact.map(Math.floor);
+      const rem    = cap - floors.reduce((s, f) => s + f, 0);
+      const extra  = [...floors];
+      exact.map((e, i) => ({ i, frac: e - floors[i] }))
+        .sort((a, b) => b.frac - a.frac)
+        .slice(0, rem)
+        .forEach(({ i }) => extra[i]++);
+      bottlenecks.forEach((p, i) => allocMap.set(p.id, allocMap.get(p.id)! + extra[i]));
+      cap = 0;
+    }
+  }
+
+  // Sort DESC so the largest allocations fill first
   const queue = active
-    .map((p, i) => ({ id: p.id, lengthMm: p.lengthMm, remaining: allocs[i] }))
+    .map(p => ({ id: p.id, lengthMm: p.lengthMm, remaining: allocMap.get(p.id) || 0 }))
     .filter(a => a.remaining > 0)
     .sort((a, b) => b.remaining - a.remaining);
 
@@ -339,8 +366,28 @@ export default function WorkPlanCalculator({ positions }: Props) {
   });
 
   const totalUnits = workers * planPerWorker;
-  const unitsPerKit = positions.filter(p => p.qtyPerPostomat > 0).reduce((s, p) => s + p.qtyPerPostomat, 0);
-  const kitsFromProduction = unitsPerKit > 0 ? Math.floor(totalUnits / unitsPerKit) : 0;
+
+  // Projected kits after today's deficit-based production
+  const projectedKits = useMemo(() => {
+    const active = positions.filter(p => p.qtyPerPostomat > 0);
+    if (!active.length) return 0;
+    // Simulate the same deficit fill as distribute() to find resulting min kits
+    const vAvail = new Map(active.map(p => [p.id, p.available]));
+    let cap = totalUnits;
+    while (cap > 0) {
+      const kitsNow = active.map(p => Math.floor(vAvail.get(p.id)! / p.qtyPerPostomat));
+      const minKits = Math.min(...kitsNow);
+      const bottlenecks = active.filter((_, i) => kitsNow[i] === minKits);
+      const needs = bottlenecks.map(p => Math.max(0, (minKits + 1) * p.qtyPerPostomat - vAvail.get(p.id)!));
+      const batchTotal = needs.reduce((s, n) => s + n, 0);
+      if (batchTotal === 0) break;
+      if (batchTotal <= cap) {
+        bottlenecks.forEach((p, i) => vAvail.set(p.id, (minKits + 1) * p.qtyPerPostomat));
+        cap -= batchTotal;
+      } else { break; }
+    }
+    return Math.min(...active.map(p => Math.floor(vAvail.get(p.id)! / p.qtyPerPostomat)));
+  }, [positions, totalUnits]);
 
   const stockKits = useMemo(() => {
     const active = positions.filter(p => p.qtyPerPostomat > 0);
@@ -348,7 +395,8 @@ export default function WorkPlanCalculator({ positions }: Props) {
     return Math.min(...active.map(p => Math.floor(p.available / p.qtyPerPostomat)));
   }, [positions]);
 
-  const totalKits = stockKits + kitsFromProduction;
+  const kitsFromProduction = projectedKits - stockKits;
+  const totalKits = projectedKits;
 
   const workerTasks = useMemo(
     () => distribute(positions, workers, planPerWorker),
@@ -383,8 +431,8 @@ export default function WorkPlanCalculator({ positions }: Props) {
         />
         <StatsCard
           title="Готових комплектів"
-          value={kitsFromProduction}
-          sub={`з ${totalUnits} шт виробітку`}
+          value={projectedKits}
+          sub={`після виробітку · зараз ${stockKits}`}
           color="indigo"
           icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -394,9 +442,9 @@ export default function WorkPlanCalculator({ positions }: Props) {
           }
         />
         <StatsCard
-          title="Разом зі складом"
-          value={totalKits}
-          sub={`склад ${stockKits} + виробіток ${kitsFromProduction}`}
+          title="Приріст комплектів"
+          value={`+${kitsFromProduction}`}
+          sub={`нових компл. за зміну`}
           color="violet"
           icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
