@@ -40,56 +40,65 @@ function Stepper({ label, sub, value, onChange }: {
 
 type Task = { lengthMm: number; posId: string; qty: number };
 
-function distribute(positions: PositionRow[], workers: number, planPerWorker: number): Task[][] {
-  const active = positions.filter(p => p.qtyPerPostomat > 0);
-  const totalCapacity = workers * planPerWorker;
+type AllocResult = {
+  allocs: Map<string, number>;   // posId → units to produce
+  projectedKits: number;         // min kits after production
+};
 
-  if (!active.length || !totalCapacity)
-    return Array.from({ length: workers }, () => []);
-
-  // Deficit-based allocation: fill bottleneck positions first to maximise complete kits.
-  // Each iteration: find the position(s) with fewest kits, fill them to the next level.
-  const allocMap = new Map(active.map(p => [p.id, 0]));
-  const vAvail   = new Map(active.map(p => [p.id, p.available])); // virtual available
+// Core: fills bottleneck positions first to maximise complete kits.
+// Ignores positions that already have enough — no wasted capacity.
+function computeAllocs(active: PositionRow[], totalCapacity: number): AllocResult {
+  const allocs = new Map(active.map(p => [p.id, 0]));
+  const vAvail = new Map(active.map(p => [p.id, p.available]));
   let cap = totalCapacity;
 
   while (cap > 0) {
-    const kitsNow  = active.map(p => Math.floor(vAvail.get(p.id)! / p.qtyPerPostomat));
-    const minKits  = Math.min(...kitsNow);
+    const kitsNow    = active.map(p => Math.floor(vAvail.get(p.id)! / p.qtyPerPostomat));
+    const minKits    = Math.min(...kitsNow);
     const bottlenecks = active.filter((_, i) => kitsNow[i] === minKits);
-
-    // Units each bottleneck needs to reach minKits+1
-    const needs = bottlenecks.map(p => Math.max(0, (minKits + 1) * p.qtyPerPostomat - vAvail.get(p.id)!));
+    const needs      = bottlenecks.map(p =>
+      Math.max(0, (minKits + 1) * p.qtyPerPostomat - vAvail.get(p.id)!));
     const batchTotal = needs.reduce((s, n) => s + n, 0);
 
-    if (batchTotal === 0) break; // all positions already balanced, nothing left to fill
+    if (batchTotal === 0) break;
 
     if (batchTotal <= cap) {
-      // Fill all bottlenecks to the next kit level
       bottlenecks.forEach((p, i) => {
-        allocMap.set(p.id, allocMap.get(p.id)! + needs[i]);
+        allocs.set(p.id, allocs.get(p.id)! + needs[i]);
         vAvail.set(p.id, (minKits + 1) * p.qtyPerPostomat);
       });
       cap -= batchTotal;
     } else {
-      // Partial fill: distribute cap among bottlenecks weighted by qtyPerPostomat (Hamilton)
+      // Partial fill: spread cap proportionally among bottlenecks (Hamilton)
       const totalQty = bottlenecks.reduce((s, p) => s + p.qtyPerPostomat, 0);
       const exact  = bottlenecks.map(p => cap * p.qtyPerPostomat / totalQty);
       const floors = exact.map(Math.floor);
       const rem    = cap - floors.reduce((s, f) => s + f, 0);
       const extra  = [...floors];
       exact.map((e, i) => ({ i, frac: e - floors[i] }))
-        .sort((a, b) => b.frac - a.frac)
-        .slice(0, rem)
+        .sort((a, b) => b.frac - a.frac).slice(0, rem)
         .forEach(({ i }) => extra[i]++);
-      bottlenecks.forEach((p, i) => allocMap.set(p.id, allocMap.get(p.id)! + extra[i]));
+      bottlenecks.forEach((p, i) => allocs.set(p.id, allocs.get(p.id)! + extra[i]));
       cap = 0;
     }
   }
 
-  // Sort DESC so the largest allocations fill first
+  const projectedKits = active.length
+    ? Math.min(...active.map(p => Math.floor(vAvail.get(p.id)! / p.qtyPerPostomat)))
+    : 0;
+
+  return { allocs, projectedKits };
+}
+
+function distribute(positions: PositionRow[], workers: number, planPerWorker: number): Task[][] {
+  const active = positions.filter(p => p.qtyPerPostomat > 0);
+  const totalCapacity = workers * planPerWorker;
+  if (!active.length || !totalCapacity) return Array.from({ length: workers }, () => []);
+
+  const { allocs } = computeAllocs(active, totalCapacity);
+
   const queue = active
-    .map(p => ({ id: p.id, lengthMm: p.lengthMm, remaining: allocMap.get(p.id) || 0 }))
+    .map(p => ({ id: p.id, lengthMm: p.lengthMm, remaining: allocs.get(p.id) || 0 }))
     .filter(a => a.remaining > 0)
     .sort((a, b) => b.remaining - a.remaining);
 
@@ -100,10 +109,8 @@ function distribute(positions: PositionRow[], workers: number, planPerWorker: nu
   while (wIdx < workers && qi < queue.length) {
     const capacity = planPerWorker - workerLoad[wIdx];
     if (capacity <= 0) { wIdx++; continue; }
-
     const pos    = queue[qi];
     const assign = Math.min(pos.remaining, capacity);
-
     if (assign > 0) {
       const existing = workerTasks[wIdx].find(t => t.posId === pos.id);
       if (existing) existing.qty += assign;
@@ -111,7 +118,6 @@ function distribute(positions: PositionRow[], workers: number, planPerWorker: nu
       workerLoad[wIdx] += assign;
       pos.remaining    -= assign;
     }
-
     if (pos.remaining === 0) qi++;
     if (workerLoad[wIdx] >= planPerWorker) wIdx++;
   }
@@ -367,36 +373,27 @@ export default function WorkPlanCalculator({ positions }: Props) {
 
   const totalUnits = workers * planPerWorker;
 
-  // Projected kits after today's deficit-based production
-  const projectedKits = useMemo(() => {
+  const { projectedKits, stockKits, kitsGain, deficitRows } = useMemo(() => {
     const active = positions.filter(p => p.qtyPerPostomat > 0);
-    if (!active.length) return 0;
-    // Simulate the same deficit fill as distribute() to find resulting min kits
-    const vAvail = new Map(active.map(p => [p.id, p.available]));
-    let cap = totalUnits;
-    while (cap > 0) {
-      const kitsNow = active.map(p => Math.floor(vAvail.get(p.id)! / p.qtyPerPostomat));
-      const minKits = Math.min(...kitsNow);
-      const bottlenecks = active.filter((_, i) => kitsNow[i] === minKits);
-      const needs = bottlenecks.map(p => Math.max(0, (minKits + 1) * p.qtyPerPostomat - vAvail.get(p.id)!));
-      const batchTotal = needs.reduce((s, n) => s + n, 0);
-      if (batchTotal === 0) break;
-      if (batchTotal <= cap) {
-        bottlenecks.forEach((p, i) => vAvail.set(p.id, (minKits + 1) * p.qtyPerPostomat));
-        cap -= batchTotal;
-      } else { break; }
-    }
-    return Math.min(...active.map(p => Math.floor(vAvail.get(p.id)! / p.qtyPerPostomat)));
+    if (!active.length) return { projectedKits: 0, stockKits: 0, kitsGain: 0, deficitRows: [] };
+
+    const stockKits = Math.min(...active.map(p => Math.floor(p.available / p.qtyPerPostomat)));
+    const { allocs, projectedKits } = computeAllocs(active, totalUnits);
+
+    // Build per-position breakdown for the deficit table
+    const deficitRows = active
+      .map(p => ({
+        id: p.id,
+        lengthMm: p.lengthMm,
+        currentKits: Math.floor(p.available / p.qtyPerPostomat),
+        producing:   allocs.get(p.id) || 0,
+        projKits:    Math.floor((p.available + (allocs.get(p.id) || 0)) / p.qtyPerPostomat),
+        qtyPerKit:   p.qtyPerPostomat,
+      }))
+      .sort((a, b) => a.currentKits - b.currentKits); // bottlenecks first
+
+    return { projectedKits, stockKits, kitsGain: projectedKits - stockKits, deficitRows };
   }, [positions, totalUnits]);
-
-  const stockKits = useMemo(() => {
-    const active = positions.filter(p => p.qtyPerPostomat > 0);
-    if (active.length === 0) return 0;
-    return Math.min(...active.map(p => Math.floor(p.available / p.qtyPerPostomat)));
-  }, [positions]);
-
-  const kitsFromProduction = projectedKits - stockKits;
-  const totalKits = projectedKits;
 
   const workerTasks = useMemo(
     () => distribute(positions, workers, planPerWorker),
@@ -419,7 +416,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
         <StatsCard
           title="Загальний виробіток"
           value={`${totalUnits} шт`}
-          sub={`${workers} прац. × ${planPerWorker} шт`}
+          sub={`${workers} прац. × ${planPerWorker} шт/зміна`}
           color="emerald"
           icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -432,7 +429,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
         <StatsCard
           title="Готових комплектів"
           value={projectedKits}
-          sub={`після виробітку · зараз ${stockKits}`}
+          sub={`після зміни · зараз ${stockKits}`}
           color="indigo"
           icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -442,9 +439,9 @@ export default function WorkPlanCalculator({ positions }: Props) {
           }
         />
         <StatsCard
-          title="Приріст комплектів"
-          value={`+${kitsFromProduction}`}
-          sub={`нових компл. за зміну`}
+          title="Приріст за зміну"
+          value={`+${kitsGain}`}
+          sub={`нових готових комплектів`}
           color="violet"
           icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -546,6 +543,73 @@ export default function WorkPlanCalculator({ positions }: Props) {
           );
         })}
       </div>
+
+      {/* Deficit breakdown table */}
+      {deficitRows.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
+            <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Розподіл по позиціях</p>
+            <p className="text-[11px] text-c4 mt-0.5">Тільки дефіцитні позиції отримують завдання</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-separate border-spacing-0">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
+                  {['Позиція', 'Зараз компл.', 'Виробляємо шт', 'Буде компл.', 'Статус'].map((h, i) => (
+                    <th key={h} className={`th ${i === 0 ? 'text-left' : 'text-right'} ${i === 4 ? 'text-left' : ''}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {deficitRows.map((row, idx) => {
+                  const isBottleneck = row.currentKits === deficitRows[0].currentKits;
+                  const isSkipped    = row.producing === 0;
+                  const isLast       = idx === deficitRows.length - 1;
+                  return (
+                    <tr key={row.id}
+                      className={isBottleneck ? 'bg-red-500/[0.04]' : ''}
+                      style={!isLast ? { borderBottom: '1px solid var(--cbrd)' } : {}}
+                    >
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full shrink-0
+                            ${isBottleneck ? 'bg-red-500' : isSkipped ? 'bg-c4' : 'bg-indigo-500/50'}`} />
+                          <span className="text-[13px] font-semibold text-c1">{row.lengthMm} мм</span>
+                          <span className="text-[11px] text-c4">×{row.qtyPerKit} шт/компл</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`text-[14px] font-semibold tabular-nums
+                          ${isBottleneck ? 'text-red-600 dark:text-red-400' : 'text-c3'}`}>
+                          {row.currentKits}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        {row.producing > 0
+                          ? <span className="text-[14px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">+{row.producing}</span>
+                          : <span className="text-[13px] text-c4">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`text-[14px] font-bold tabular-nums
+                          ${row.projKits > row.currentKits ? 'text-indigo-600 dark:text-indigo-400' : 'text-c3'}`}>
+                          {row.projKits}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isSkipped
+                          ? <span className="badge-slate">достатньо</span>
+                          : isBottleneck
+                            ? <span className="badge-red">пріоритет</span>
+                            : <span className="badge-indigo">поповнення</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Print modal */}
       {printIndex !== null && (
