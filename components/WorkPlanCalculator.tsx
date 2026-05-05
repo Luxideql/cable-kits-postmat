@@ -365,6 +365,9 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   const [printIndex, setPrintIndex] = useState<number | 'all' | null>(null);
   const [closing, setClosing]       = useState(false);
   const [shiftClosed, setShiftClosed] = useState(false);
+  const [reportingOn, setReportingOn] = useState<boolean>(() => {
+    try { return JSON.parse(localStorage.getItem('workplan_reporting') ?? 'true'); } catch { return true; }
+  });
 
   // Keep names + empIds arrays in sync with workers count
   useEffect(() => {
@@ -386,6 +389,13 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, workerNames, selectedEmpIds }));
   }, [workers, planPerWorker, workerNames, selectedEmpIds]);
+
+  function toggleReporting() {
+    setReportingOn(prev => {
+      localStorage.setItem('workplan_reporting', JSON.stringify(!prev));
+      return !prev;
+    });
+  }
 
 
   function getFact(workerIdx: number, posId: string, plannedQty: number): number {
@@ -542,18 +552,42 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">Параметри</p>
-          <button
-            type="button"
-            onClick={() => setPrintIndex('all')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium
-                       text-indigo-600 dark:text-indigo-400 transition-colors"
-            style={{ border: '1px solid var(--cbrd)' }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
-          >
-            <PrintIcon />
-            Друкувати
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Reporting toggle */}
+            <button
+              type="button"
+              onClick={toggleReporting}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all"
+              style={{
+                border: '1px solid var(--cbrd)',
+                backgroundColor: reportingOn ? 'rgba(16,185,129,0.1)' : 'var(--chov)',
+                color: reportingOn ? '#059669' : 'var(--cc4)',
+              }}
+            >
+              <span
+                className="relative inline-flex w-8 h-4 rounded-full transition-colors duration-200 shrink-0"
+                style={{ backgroundColor: reportingOn ? '#059669' : '#9ca3af' }}
+              >
+                <span
+                  className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform duration-200"
+                  style={{ transform: reportingOn ? 'translateX(17px)' : 'translateX(2px)' }}
+                />
+              </span>
+              {reportingOn ? 'Звіт дозволено' : 'Звіт заблоковано'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPrintIndex('all')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium
+                         text-indigo-600 dark:text-indigo-400 transition-colors"
+              style={{ border: '1px solid var(--cbrd)' }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+            >
+              <PrintIcon />
+              Друкувати
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-6 items-end">
           <Stepper label="Кількість працівників" value={workers} onChange={setWorkers} />
@@ -659,6 +693,10 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
                   {isDone ? (
                     <span className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                       ✓ Зафіксовано
+                    </span>
+                  ) : !reportingOn ? (
+                    <span className="text-[12px] font-semibold text-c4 flex items-center gap-1">
+                      🔒 Заблоковано
                     </span>
                   ) : (
                     <button
