@@ -359,12 +359,13 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     Array.from({ length: saved?.workers ?? 3 }, (_, i) => saved?.selectedEmpIds?.[i] ?? '')
   );
   // factMap key = `${workerIdx}-${posId}`, value = actual qty (pre-filled with planned)
-  const [factMap, setFactMap]       = useState<Record<string, number>>({});
-  const [confirmed, setConfirmed]   = useState<Set<number>>(new Set());
-  const [confirming, setConfirming] = useState<number | null>(null);
-  const [printIndex, setPrintIndex] = useState<number | 'all' | null>(null);
-  const [closing, setClosing]       = useState(false);
-  const [shiftClosed, setShiftClosed] = useState(false);
+  const [factMap, setFactMap]         = useState<Record<string, number>>({});
+  const [issued, setIssued]           = useState<Set<number>>(() => new Set(saved?.issuedArr ?? []));
+  const [confirmed, setConfirmed]     = useState<Set<number>>(new Set());
+  const [confirming, setConfirming]   = useState<number | null>(null);
+  const [printIndex, setPrintIndex]   = useState<number | 'all' | null>(null);
+  // accumulates per-position qty already confirmed this session (to correctly stack stock updates)
+  const [confirmedAccum, setConfirmedAccum] = useState<Map<string, number>>(new Map());
   const [reportingOn, setReportingOn] = useState<boolean>(() => {
     try { return JSON.parse(localStorage.getItem('workplan_reporting') ?? 'true'); } catch { return true; }
   });
@@ -383,12 +384,17 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     });
     // Reset confirmations when plan changes
     setConfirmed(new Set());
+    setIssued(new Set());
     setFactMap({});
+    setConfirmedAccum(new Map());
   }, [workers, planPerWorker]);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, workerNames, selectedEmpIds }));
-  }, [workers, planPerWorker, workerNames, selectedEmpIds]);
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      workers, planPerWorker, workerNames, selectedEmpIds,
+      issuedArr: Array.from(issued),
+    }));
+  }, [workers, planPerWorker, workerNames, selectedEmpIds, issued]);
 
   function toggleReporting() {
     setReportingOn(prev => {
@@ -407,6 +413,10 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     setFactMap(prev => ({ ...prev, [`${workerIdx}-${posId}`]: val }));
   }
 
+  function issueWorker(workerIdx: number) {
+    setIssued(prev => { const s = new Set(prev); s.add(workerIdx); return s; });
+  }
+
   async function confirmWorker(workerIdx: number) {
     const empId = selectedEmpIds[workerIdx] || workerNames[workerIdx]?.trim();
     if (!empId) { alert('Введіть ім\'я або оберіть працівника зі списку'); return; }
@@ -414,6 +424,7 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     if (!tasks.length) return;
     setConfirming(workerIdx);
     try {
+      // 1. Save DailyReports
       await Promise.all(tasks.map(t => {
         const qty = getFact(workerIdx, t.posId, t.qty);
         if (qty <= 0) return Promise.resolve();
@@ -423,39 +434,31 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
           body: JSON.stringify({ employeeId: empId, positionId: t.posId, qty }),
         });
       }));
+
+      // 2. Accumulate confirmed qty per position and immediately update stock
+      const newAccum = new Map(confirmedAccum);
+      for (const t of tasks) {
+        const qty = getFact(workerIdx, t.posId, t.qty);
+        if (qty > 0) newAccum.set(t.posId, (newAccum.get(t.posId) ?? 0) + qty);
+      }
+      setConfirmedAccum(newAccum);
+
+      const todayISO = new Date().toISOString().split('T')[0];
+      await Promise.all(
+        Array.from(newAccum.entries()).map(([posId, totalQty]) => {
+          const pos = positions.find(p => p.id === posId);
+          if (!pos) return Promise.resolve();
+          return fetch('/api/positions/stock', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: posId, stock: pos.available + totalQty, stockDate: todayISO }),
+          });
+        })
+      );
+
       setConfirmed(prev => { const s = new Set(prev); s.add(workerIdx); return s; });
-      setShiftClosed(false);
     } finally {
       setConfirming(null);
-    }
-  }
-
-  async function closeShift() {
-    setClosing(true);
-    try {
-      const todayISO = new Date().toISOString().split('T')[0];
-      // Sum confirmed quantities per position
-      const added = new Map<string, number>();
-      for (let i = 0; i < workers; i++) {
-        if (!confirmed.has(i)) continue;
-        for (const t of workerTasks[i]) {
-          const qty = getFact(i, t.posId, t.qty);
-          added.set(t.posId, (added.get(t.posId) ?? 0) + qty);
-        }
-      }
-      // Update all positions: new stock = current available + confirmed qty today
-      await Promise.all(positions.map(p =>
-        fetch('/api/positions/stock', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: p.id, stock: p.available + (added.get(p.id) ?? 0), stockDate: todayISO }),
-        })
-      ));
-      setShiftClosed(true);
-      setConfirmed(new Set());
-      setFactMap({});
-    } finally {
-      setClosing(false);
     }
   }
 
@@ -600,6 +603,7 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
         {workerTasks.map((tasks, i) => {
           const plannedTotal = tasks.reduce((s, t) => s + t.qty, 0);
           const factTotal    = tasks.reduce((s, t) => s + getFact(i, t.posId, t.qty), 0);
+          const isIssued     = issued.has(i);
           const isDone       = confirmed.has(i);
           const isConfirming = confirming === i;
           return (
@@ -610,8 +614,10 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold text-white shrink-0
-                                    ${isDone ? 'bg-gradient-to-br from-emerald-500 to-emerald-600' : 'bg-gradient-to-br from-indigo-500 to-purple-600'}`}>
-                      {isDone ? '✓' : i + 1}
+                                    ${isDone ? 'bg-gradient-to-br from-emerald-500 to-emerald-600'
+                                             : isIssued ? 'bg-gradient-to-br from-amber-500 to-orange-500'
+                                             : 'bg-gradient-to-br from-indigo-500 to-purple-600'}`}>
+                      {isDone ? '✓' : isIssued ? '▶' : i + 1}
                     </div>
                     <div className="flex flex-col flex-1 min-w-0">
                       <input
@@ -692,13 +698,13 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
                 <div className="flex items-center gap-2">
                   {isDone ? (
                     <span className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      ✓ Зафіксовано
+                      ✓ Зафіксовано на склад
                     </span>
                   ) : !reportingOn ? (
                     <span className="text-[12px] font-semibold text-c4 flex items-center gap-1">
                       🔒 Заблоковано
                     </span>
-                  ) : (
+                  ) : isIssued ? (
                     <button
                       type="button"
                       onClick={() => confirmWorker(i)}
@@ -706,10 +712,22 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold
                                  text-white transition-all disabled:opacity-40"
                       style={{ backgroundColor: '#059669' }}
-                      onMouseEnter={e => { if (!isConfirming && selectedEmpIds[i]) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#047857'; }}
+                      onMouseEnter={e => { if (!isConfirming) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#047857'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#059669'; }}
                     >
                       {isConfirming ? '...' : '✓ Зафіксувати'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => issueWorker(i)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold
+                                 text-white transition-all"
+                      style={{ backgroundColor: '#d97706' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#b45309')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d97706')}
+                    >
+                      ▶ Видати в роботу
                     </button>
                   )}
                   <button
@@ -798,43 +816,8 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
         </div>
       )}
 
-      {/* Close shift */}
-      {confirmed.size > 0 && !shiftClosed && (
-        <div className="card p-4 flex items-center justify-between gap-4"
-             style={{ borderColor: 'rgba(16,185,129,0.25)', backgroundColor: 'rgba(16,185,129,0.04)' }}>
-          <div>
-            <p className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
-              {confirmed.size} з {workers} працівників зафіксовано
-            </p>
-            <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/60 mt-0.5">
-              Закрийте зміну — виробіток збережеться до фактичного залишку складу
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={closeShift}
-            disabled={closing}
-            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold
-                       text-white transition-all disabled:opacity-50"
-            style={{ backgroundColor: '#059669' }}
-            onMouseEnter={e => { if (!closing) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#047857'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#059669'; }}
-          >
-            {closing ? (
-              <span>Зберігаємо...</span>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                Закрити зміну
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
-      {shiftClosed && (
+      {/* Confirmed summary */}
+      {confirmed.size > 0 && (
         <div className="card p-4 flex items-center gap-3"
              style={{ borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.06)' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -842,9 +825,11 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
             <polyline points="22 4 12 14.01 9 11.01"/>
           </svg>
           <div>
-            <p className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">Зміну закрито</p>
+            <p className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
+              {confirmed.size} з {workers} зафіксовано на склад
+            </p>
             <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/60 mt-0.5">
-              Виробіток збережено до складу. Оновіть сторінку — план перерахується від нових залишків.
+              Оновіть сторінку — план перерахується від нових залишків
             </p>
           </div>
         </div>
