@@ -395,8 +395,8 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   }
 
   async function confirmWorker(workerIdx: number) {
-    const empId = selectedEmpIds[workerIdx];
-    if (!empId) { alert('Оберіть працівника перед фіксацією'); return; }
+    const empId = selectedEmpIds[workerIdx] || workerNames[workerIdx]?.trim();
+    if (!empId) { alert('Введіть ім\'я або оберіть працівника зі списку'); return; }
     const tasks = workerTasks[workerIdx];
     if (!tasks.length) return;
     setConfirming(workerIdx);
@@ -545,29 +545,34 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
                                     ${isDone ? 'bg-gradient-to-br from-emerald-500 to-emerald-600' : 'bg-gradient-to-br from-indigo-500 to-purple-600'}`}>
                       {isDone ? '✓' : i + 1}
                     </div>
-                    {employees.length > 0 ? (
-                      <select
-                        value={selectedEmpIds[i] ?? ''}
-                        onChange={e => updateEmpId(i, e.target.value)}
-                        disabled={isDone}
-                        className="flex-1 min-w-0 bg-transparent text-[14px] font-semibold text-c1 outline-none"
-                        style={{ border: 'none' }}
-                      >
-                        <option value="">— Оберіть працівника —</option>
-                        {employees.map(e => (
-                          <option key={e.id} value={e.id}>{e.fullName}</option>
-                        ))}
-                      </select>
-                    ) : (
+                    <div className="flex flex-col flex-1 min-w-0">
                       <input
                         type="text"
                         value={workerNames[i] ?? ''}
-                        onChange={e => updateName(i, e.target.value)}
+                        onChange={e => {
+                          updateName(i, e.target.value);
+                          // Clear empId if user edits name manually
+                          setSelectedEmpIds(prev => { const n = [...prev]; n[i] = ''; return n; });
+                        }}
                         placeholder={`Працівник ${i + 1}`}
-                        className="flex-1 min-w-0 bg-transparent text-[14px] font-semibold text-c1
-                                   outline-none placeholder:text-c4 placeholder:font-normal"
+                        disabled={isDone}
+                        className="bg-transparent text-[14px] font-semibold text-c1
+                                   outline-none placeholder:text-c4 placeholder:font-normal w-full"
                       />
-                    )}
+                      {employees.length > 0 && !isDone && (
+                        <select
+                          value={selectedEmpIds[i] ?? ''}
+                          onChange={e => updateEmpId(i, e.target.value)}
+                          className="bg-transparent text-[11px] text-c4 outline-none mt-0.5 w-full"
+                          style={{ border: 'none' }}
+                        >
+                          <option value="">зі списку...</option>
+                          {employees.map(e => (
+                            <option key={e.id} value={e.id}>{e.fullName}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
                   <span className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums shrink-0">
                     {plannedTotal} шт
@@ -625,7 +630,7 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
                     <button
                       type="button"
                       onClick={() => confirmWorker(i)}
-                      disabled={isConfirming || !selectedEmpIds[i]}
+                      disabled={isConfirming || (!selectedEmpIds[i] && !workerNames[i]?.trim())}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold
                                  text-white transition-all disabled:opacity-40"
                       style={{ backgroundColor: '#059669' }}
