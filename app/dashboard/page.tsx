@@ -2,7 +2,6 @@ import StatsCard from '@/components/StatsCard';
 import PositionsTable from '@/components/PositionsTable';
 import InfoTooltip from '@/components/InfoTooltip';
 import BarChart from '@/components/BarChart';
-import PasswordGate from '@/components/PasswordGate';
 import { getKitStats, getDailyReports, getShipments } from '@/lib/data';
 import { getTodayDate, formatDate } from '@/lib/calculations';
 import type { DayBar } from '@/components/BarChart';
@@ -99,7 +98,6 @@ export default async function DashboardPage() {
   const readyToShip   = Math.max(0, kitStats.totalKits - kitStats.shipped);
 
   return (
-    <PasswordGate code="6323">
     <div className="space-y-5 animate-fade-up">
 
       {/* Header */}
@@ -206,6 +204,5 @@ export default async function DashboardPage() {
         <PositionsTable positions={kitStats.positions} />
       </div>
     </div>
-    </PasswordGate>
   );
 }
