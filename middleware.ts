@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const COOKIE = 'app_auth';
-const CODE   = '6323';
+const PASSWORD = '6323';
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Always allow: login page, auth API, Telegram webhook, Next.js internals
+  // Skip: Telegram webhook and Next.js internals
   if (
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/telegram') ||
     pathname.startsWith('/_next') ||
     pathname === '/favicon.ico'
@@ -18,15 +15,19 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const auth = req.cookies.get(COOKIE)?.value;
-  if (auth !== CODE) {
-    const url = req.nextUrl.clone();
-    url.pathname = '/login';
-    url.searchParams.set('from', pathname);
-    return NextResponse.redirect(url);
+  const auth = req.headers.get('authorization') ?? '';
+  if (auth.startsWith('Basic ')) {
+    try {
+      const decoded  = atob(auth.slice(6));
+      const password = decoded.slice(decoded.indexOf(':') + 1);
+      if (password === PASSWORD) return NextResponse.next();
+    } catch { /* invalid base64 */ }
   }
 
-  return NextResponse.next();
+  return new NextResponse('Unauthorized', {
+    status: 401,
+    headers: { 'WWW-Authenticate': 'Basic realm="Вхід", charset="UTF-8"' },
+  });
 }
 
 export const config = {
