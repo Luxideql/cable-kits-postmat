@@ -12,7 +12,7 @@ function genId(prefix: string) {
 }
 
 // ─── Employees ────────────────────────────────────────────────────────────────
-// Columns: id | повне_імя | telegram_id | посада | активний
+// Columns: id | повне_імя | telegram_id | посада | активний | сповіщення | бот_звіт
 
 function parseEmployee(e: Record<string, string>): Employee {
   return {
@@ -22,23 +22,34 @@ function parseEmployee(e: Record<string, string>): Employee {
     position: e.посада,
     active: e.активний !== 'false',
     notify: e.сповіщення !== 'false',
+    botReport: e['бот_звіт'] !== 'false',
   };
 }
 
 export async function getEmployees(): Promise<Employee[]> {
-  const rows = await sheetGet('Працівники!A:F');
+  const rows = await sheetGet('Працівники!A:G');
   return rowsToObjects(rows).filter(e => e.активний !== 'false').map(parseEmployee);
 }
 
 export async function setEmployeeNotify(empId: string, notify: boolean): Promise<void> {
-  const rows = await sheetGet('Працівники!A:F');
-  // Ensure header exists in F1
+  const rows = await sheetGet('Працівники!A:G');
   if (!rows[0] || rows[0].length < 6 || !rows[0][5]) {
     await sheetUpdate('Працівники!F1', [['сповіщення']]);
   }
   const idx = rows.findIndex((r, i) => i > 0 && r[0] === empId);
   if (idx > 0) {
     await sheetUpdate(`Працівники!F${idx + 1}`, [[String(notify)]]);
+  }
+}
+
+export async function setEmployeeBotReport(empId: string, allowed: boolean): Promise<void> {
+  const rows = await sheetGet('Працівники!A:G');
+  if (!rows[0] || rows[0].length < 7 || !rows[0][6]) {
+    await sheetUpdate('Працівники!G1', [['бот_звіт']]);
+  }
+  const idx = rows.findIndex((r, i) => i > 0 && r[0] === empId);
+  if (idx > 0) {
+    await sheetUpdate(`Працівники!G${idx + 1}`, [[String(allowed)]]);
   }
 }
 
@@ -49,8 +60,8 @@ export async function getEmployeeByTelegramId(tgId: string): Promise<Employee | 
 
 export async function addEmployee(emp: Omit<Employee, 'id'>): Promise<{ id: string }> {
   const id = genId('emp');
-  await sheetAppend('Працівники!A:E', [
-    id, emp.fullName, emp.telegramId ?? '', emp.position ?? 'Монтажник', 'true',
+  await sheetAppend('Працівники!A:G', [
+    id, emp.fullName, emp.telegramId ?? '', emp.position ?? 'Монтажник', 'true', 'true', 'true',
   ]);
   return { id };
 }

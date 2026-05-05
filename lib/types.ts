@@ -5,6 +5,7 @@ export interface Employee {
   position: string;
   active: boolean;
   notify: boolean;
+  botReport: boolean;
 }
 
 export interface Position {

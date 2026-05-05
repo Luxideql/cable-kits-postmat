@@ -37,6 +37,7 @@ export async function POST(req: Request) {
       position: body.position ?? '',
       active: true,
       notify: true,
+      botReport: true,
     });
     return NextResponse.json({ success: true, employee: emp });
   } catch (e: unknown) {
