@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import StatsCard from './StatsCard';
 
 type PositionRow = {
@@ -16,7 +16,10 @@ type Props = {
   employees?: Employee[];
 };
 
-const LS_KEY = 'workplan_v3';
+type WorkCardTask = { posId: string; lengthMm: number; plannedQty: number; actualQty: number };
+type WorkCard = { id: string; date: string; employeeName: string; employeeId: string; tasks: WorkCardTask[]; status: 'issued' | 'confirmed' | 'cancelled' };
+
+const LS_KEY = 'workplan_v4';
 
 function Stepper({ label, sub, value, onChange }: {
   label: string; sub?: string; value: number; onChange: (v: number) => void;
@@ -366,9 +369,16 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   const [printIndex, setPrintIndex]   = useState<number | 'all' | null>(null);
   // accumulates per-position qty already confirmed this session (to correctly stack stock updates)
   const [confirmedAccum, setConfirmedAccum] = useState<Map<string, number>>(new Map());
+  const [cardIds, setCardIds]               = useState<Record<number, string>>(saved?.cardIds ?? {});
+  const [cancelling, setCancelling]         = useState<number | null>(null);
+  const [historyDate, setHistoryDate]       = useState('');
+  const [historyCards, setHistoryCards]     = useState<WorkCard[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [reportingOn, setReportingOn] = useState<boolean>(() => {
     try { return JSON.parse(localStorage.getItem('workplan_reporting') ?? 'true'); } catch { return true; }
   });
+
+  const isMounted = useRef(false);
 
   // Keep names + empIds arrays in sync with workers count
   useEffect(() => {
@@ -382,19 +392,23 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
       if (prev.length < workers) return [...prev, ...Array(workers - prev.length).fill('')];
       return prev.slice(0, workers);
     });
-    // Reset confirmations when plan changes
-    setConfirmed(new Set());
-    setIssued(new Set());
-    setFactMap({});
-    setConfirmedAccum(new Map());
+    // Reset confirmations only when plan actually changes, not on initial mount
+    if (isMounted.current) {
+      setConfirmed(new Set());
+      setIssued(new Set());
+      setFactMap({});
+      setConfirmedAccum(new Map());
+      setCardIds({});
+    }
+    isMounted.current = true;
   }, [workers, planPerWorker]);
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({
       workers, planPerWorker, workerNames, selectedEmpIds,
-      issuedArr: Array.from(issued),
+      issuedArr: Array.from(issued), cardIds,
     }));
-  }, [workers, planPerWorker, workerNames, selectedEmpIds, issued]);
+  }, [workers, planPerWorker, workerNames, selectedEmpIds, issued, cardIds]);
 
   function toggleReporting() {
     setReportingOn(prev => {
@@ -413,8 +427,26 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     setFactMap(prev => ({ ...prev, [`${workerIdx}-${posId}`]: val }));
   }
 
-  function issueWorker(workerIdx: number) {
+  async function issueWorker(workerIdx: number) {
     setIssued(prev => { const s = new Set(prev); s.add(workerIdx); return s; });
+    const todayISO = new Date().toISOString().split('T')[0];
+    const empName = workerNames[workerIdx]?.trim() || `Працівник ${workerIdx + 1}`;
+    const tasks: WorkCardTask[] = workerTasks[workerIdx].map(t => ({
+      posId: t.posId, lengthMm: t.lengthMm, plannedQty: t.qty, actualQty: t.qty,
+    }));
+    try {
+      const res = await fetch('/api/workcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: todayISO, employeeName: empName,
+          employeeId: selectedEmpIds[workerIdx] || '',
+          tasks, status: 'issued',
+        }),
+      });
+      const { id } = await res.json();
+      setCardIds(prev => ({ ...prev, [workerIdx]: id }));
+    } catch { /* non-critical — card still issued locally */ }
   }
 
   async function confirmWorker(workerIdx: number) {
@@ -457,8 +489,87 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
       );
 
       setConfirmed(prev => { const s = new Set(prev); s.add(workerIdx); return s; });
+
+      // Update card in Sheets
+      const cardId = cardIds[workerIdx];
+      if (cardId) {
+        const updatedTasks: WorkCardTask[] = tasks.map(t => ({
+          posId: t.posId, lengthMm: t.lengthMm, plannedQty: t.qty,
+          actualQty: getFact(workerIdx, t.posId, t.qty),
+        }));
+        fetch(`/api/workcards/${cardId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'confirmed', tasks: updatedTasks }),
+        }).catch(() => {});
+      }
     } finally {
       setConfirming(null);
+    }
+  }
+
+  async function cancelWorker(workerIdx: number) {
+    const cardId = cardIds[workerIdx];
+    setCancelling(workerIdx);
+    try {
+      if (confirmed.has(workerIdx)) {
+        // Revert stock: subtract this worker's confirmed qty from confirmedAccum and recalculate stock
+        const newAccum = new Map(confirmedAccum);
+        for (const t of workerTasks[workerIdx]) {
+          const qty = getFact(workerIdx, t.posId, t.qty);
+          newAccum.set(t.posId, Math.max(0, (newAccum.get(t.posId) ?? 0) - qty));
+        }
+        const todayISO = new Date().toISOString().split('T')[0];
+        await Promise.all(
+          workerTasks[workerIdx].map(t => {
+            const qty = getFact(workerIdx, t.posId, t.qty);
+            const pos = positions.find(p => p.id === t.posId);
+            if (!pos || qty <= 0) return Promise.resolve();
+            const remaining = newAccum.get(t.posId) ?? 0;
+            return fetch('/api/positions/stock', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: t.posId, stock: pos.available + remaining, stockDate: todayISO }),
+            });
+          })
+        );
+        setConfirmedAccum(newAccum);
+        setConfirmed(prev => { const s = new Set(prev); s.delete(workerIdx); return s; });
+      }
+      setIssued(prev => { const s = new Set(prev); s.delete(workerIdx); return s; });
+      if (cardId) {
+        fetch(`/api/workcards/${cardId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'cancelled' }),
+        }).catch(() => {});
+        setCardIds(prev => { const n = { ...prev }; delete n[workerIdx]; return n; });
+      }
+    } finally {
+      setCancelling(null);
+    }
+  }
+
+  async function loadHistory() {
+    if (!historyDate) return;
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/workcards?date=${historyDate}`);
+      setHistoryCards(await res.json());
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function cancelHistoryCard(card: WorkCard) {
+    if (!confirm(`Скасувати карточку ${card.employeeName}?`)) return;
+    const res = await fetch(`/api/workcards/${card.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' }),
+    });
+    if (res.ok) {
+      setHistoryCards(prev => prev.map(c => c.id === card.id ? { ...c, status: 'cancelled' } : c));
     }
   }
 
@@ -730,6 +841,32 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
                       ▶ Видати в роботу
                     </button>
                   )}
+                  {isIssued && !isDone && (
+                    <button
+                      type="button"
+                      onClick={() => cancelWorker(i)}
+                      disabled={cancelling === i}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+                      style={{ border: '1px solid #ef4444', color: '#ef4444' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                    >
+                      {cancelling === i ? '...' : '✕ Скасувати'}
+                    </button>
+                  )}
+                  {isDone && (
+                    <button
+                      type="button"
+                      onClick={() => cancelWorker(i)}
+                      disabled={cancelling === i}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+                      style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                    >
+                      {cancelling === i ? '...' : '↩ Скасувати'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setPrintIndex(i)}
@@ -834,6 +971,80 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
           </div>
         </div>
       )}
+
+      {/* History section */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cbrd)' }}>
+          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Журнал карточок</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={historyDate}
+              onChange={e => setHistoryDate(e.target.value)}
+              className="text-[12px] text-c1 bg-transparent outline-none rounded-lg px-2 py-1"
+              style={{ border: '1px solid var(--cbrd)' }}
+            />
+            <button
+              type="button"
+              onClick={loadHistory}
+              disabled={!historyDate || historyLoading}
+              className="px-3 py-1 rounded-lg text-[12px] font-semibold text-white disabled:opacity-40"
+              style={{ backgroundColor: '#4f46e5' }}
+            >
+              {historyLoading ? '...' : 'Завантажити'}
+            </button>
+          </div>
+        </div>
+        {historyCards.length === 0 ? (
+          <p className="px-5 py-4 text-[13px] text-c4">
+            {historyDate ? 'Немає карточок за вибраний день' : 'Оберіть дату для перегляду карточок'}
+          </p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: 'var(--cbrd)' }}>
+            {historyCards.map(card => (
+              <div key={card.id} className="px-5 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-semibold text-c1 truncate">{card.employeeName}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        card.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        : card.status === 'cancelled' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                      }`}>
+                        {card.status === 'confirmed' ? '✓ зафіксовано' : card.status === 'cancelled' ? '✕ скасовано' : '▶ видано'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-3 mt-1.5">
+                      {card.tasks.map(t => (
+                        <span key={t.posId} className="text-[12px] text-c3">
+                          {t.lengthMm} мм:&nbsp;
+                          <span className="font-semibold text-c1">{t.actualQty} шт</span>
+                          {t.actualQty !== t.plannedQty && (
+                            <span className="text-c4"> (план {t.plannedQty})</span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {card.status !== 'cancelled' && (
+                    <button
+                      type="button"
+                      onClick={() => cancelHistoryCard(card)}
+                      className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors"
+                      style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--cc4)')}
+                    >
+                      Скасувати
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Print modal */}
       {printIndex !== null && (

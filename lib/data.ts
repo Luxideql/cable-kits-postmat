@@ -2,7 +2,7 @@ import {
   sheetGet, sheetBatchGet, sheetAppend, sheetUpdate, sheetUpdateFormula, sheetUpsert, sheetEnsure, rowsToObjects,
 } from './googleSheets';
 import { calcKitStats } from './calculations';
-import type { Employee, Position, ProductionPlan, DailyReport, KitStats, PositionStats, Shipment } from './types';
+import type { Employee, Position, ProductionPlan, DailyReport, KitStats, PositionStats, Shipment, WorkCard } from './types';
 import { getTodayDate } from './calculations';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -261,6 +261,58 @@ export async function getContext(tgId: string): Promise<{
     employee: empRow ? parseEmployee(empRow) : null,
     botState: stateRow ? { state: stateRow.state, data: stateRow.data } : null,
   };
+}
+
+// ─── Work Cards ───────────────────────────────────────────────────────────────
+// Columns: id | date | employeeName | employeeId | tasks (JSON) | status
+
+const WORKCARD_HEADERS = ['id', 'date', 'employeeName', 'employeeId', 'tasks', 'status'];
+
+function parseWorkCard(r: Record<string, string>): WorkCard {
+  let tasks: WorkCard['tasks'] = [];
+  try { tasks = JSON.parse(r.tasks || '[]'); } catch { tasks = []; }
+  return {
+    id: r.id,
+    date: r.date,
+    employeeName: r.employeeName,
+    employeeId: r.employeeId,
+    tasks,
+    status: (r.status || 'issued') as WorkCard['status'],
+  };
+}
+
+export async function getWorkCards(date?: string): Promise<WorkCard[]> {
+  try {
+    const rows = await sheetGet('WorkCards!A:F');
+    let cards = rowsToObjects(rows).map(parseWorkCard);
+    if (date) cards = cards.filter(c => c.date === date);
+    return cards;
+  } catch { return []; }
+}
+
+export async function addWorkCard(card: Omit<WorkCard, 'id'>): Promise<{ id: string }> {
+  await sheetEnsure('WorkCards', WORKCARD_HEADERS);
+  const id = genId('wc');
+  await sheetAppend('WorkCards!A:F', [
+    id, card.date, card.employeeName, card.employeeId,
+    JSON.stringify(card.tasks), card.status,
+  ]);
+  return { id };
+}
+
+export async function updateWorkCard(
+  id: string,
+  updates: { status?: WorkCard['status']; tasks?: WorkCard['tasks'] },
+): Promise<void> {
+  const rows = await sheetGet('WorkCards!A:F');
+  const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
+  if (idx < 1) return;
+  if (updates.tasks !== undefined) {
+    await sheetUpdate(`WorkCards!E${idx + 1}`, [[JSON.stringify(updates.tasks)]]);
+  }
+  if (updates.status !== undefined) {
+    await sheetUpdate(`WorkCards!F${idx + 1}`, [[updates.status]]);
+  }
 }
 
 // ─── Add report + reset state in one function (2 parallel API calls) ──────────

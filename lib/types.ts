@@ -63,6 +63,22 @@ export interface KitStats {
   positions: PositionStats[];
 }
 
+export interface WorkCardTask {
+  posId: string;
+  lengthMm: number;
+  plannedQty: number;
+  actualQty: number;
+}
+
+export interface WorkCard {
+  id: string;
+  date: string;
+  employeeName: string;
+  employeeId: string;
+  tasks: WorkCardTask[];
+  status: 'issued' | 'confirmed' | 'cancelled';
+}
+
 export interface EmployeeStats extends Employee {
   todayQty: number;
   weekQty: number;
