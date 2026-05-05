@@ -363,10 +363,8 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   const [confirmed, setConfirmed]   = useState<Set<number>>(new Set());
   const [confirming, setConfirming] = useState<number | null>(null);
   const [printIndex, setPrintIndex] = useState<number | 'all' | null>(null);
-  const [histRows, setHistRows]   = useState<{ date: string; total: number; byEmp: { name: string; total: number }[] }[]>([]);
-  const [histLoading, setHistLoading] = useState(false);
-  const [histKey, setHistKey]     = useState(0);
-  const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [closing, setClosing]       = useState(false);
+  const [shiftClosed, setShiftClosed] = useState(false);
 
   // Keep names + empIds arrays in sync with workers count
   useEffect(() => {
@@ -389,33 +387,6 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, workerNames, selectedEmpIds }));
   }, [workers, planPerWorker, workerNames, selectedEmpIds]);
 
-  useEffect(() => {
-    setHistLoading(true);
-    fetch('/api/reports')
-      .then(r => r.json())
-      .then(d => {
-        if (!d.success) return;
-        const reports: { date: string; employeeId: string; qty: number }[] = d.reports ?? [];
-        const dateMap = new Map<string, Map<string, number>>();
-        for (const r of reports) {
-          if (!dateMap.has(r.date)) dateMap.set(r.date, new Map());
-          const em = dateMap.get(r.date)!;
-          em.set(r.employeeId, (em.get(r.employeeId) ?? 0) + r.qty);
-        }
-        const rows = Array.from(dateMap.entries())
-          .sort((a, b) => b[0].localeCompare(a[0]))
-          .map(([date, em]) => ({
-            date,
-            total: Array.from(em.values()).reduce((s, v) => s + v, 0),
-            byEmp: Array.from(em.entries())
-              .map(([id, total]) => ({ name: employees.find(e => e.id === id)?.fullName ?? id, total }))
-              .sort((a, b) => b.total - a.total),
-          }));
-        setHistRows(rows);
-      })
-      .catch(() => {})
-      .finally(() => setHistLoading(false));
-  }, [histKey, employees]);
 
   function getFact(workerIdx: number, posId: string, plannedQty: number): number {
     const key = `${workerIdx}-${posId}`;
@@ -443,9 +414,38 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
         });
       }));
       setConfirmed(prev => { const s = new Set(prev); s.add(workerIdx); return s; });
-      setHistKey(k => k + 1);
+      setShiftClosed(false);
     } finally {
       setConfirming(null);
+    }
+  }
+
+  async function closeShift() {
+    setClosing(true);
+    try {
+      const todayISO = new Date().toISOString().split('T')[0];
+      // Sum confirmed quantities per position
+      const added = new Map<string, number>();
+      for (let i = 0; i < workers; i++) {
+        if (!confirmed.has(i)) continue;
+        for (const t of workerTasks[i]) {
+          const qty = getFact(i, t.posId, t.qty);
+          added.set(t.posId, (added.get(t.posId) ?? 0) + qty);
+        }
+      }
+      // Update all positions: new stock = current available + confirmed qty today
+      await Promise.all(positions.map(p =>
+        fetch('/api/positions/stock', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: p.id, stock: p.available + (added.get(p.id) ?? 0), stockDate: todayISO }),
+        })
+      ));
+      setShiftClosed(true);
+      setConfirmed(new Set());
+      setFactMap({});
+    } finally {
+      setClosing(false);
     }
   }
 
@@ -760,85 +760,57 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
         </div>
       )}
 
-      {/* History log — chronological */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
-          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Журнал виробітку</p>
-          <p className="text-[11px] text-c4 mt-0.5">Хронологія запущеного у роботу</p>
-        </div>
-
-        {histLoading && (
-          <div className="px-5 py-8 text-center text-[13px] text-c4">Завантаження...</div>
-        )}
-
-        {!histLoading && histRows.length === 0 && (
-          <div className="px-5 py-8 text-center text-[13px] text-c4">Фіксувань ще немає</div>
-        )}
-
-        {!histLoading && histRows.length > 0 && (
-          <div className="divide-y" style={{ borderColor: 'var(--cbrd)' }}>
-            {histRows.map((row, idx) => {
-              const [y, m, d] = row.date.split('-');
-              const label = `${d}.${m}.${y}`;
-              const isToday = row.date === new Date().toISOString().split('T')[0];
-              const isOpen  = expandedDate === row.date;
-              return (
-                <div key={row.date}>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedDate(isOpen ? null : row.date)}
-                    className="w-full flex items-center gap-3 px-5 py-3 text-left transition-colors"
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
-                  >
-                    {/* Timeline dot */}
-                    <div className="flex flex-col items-center shrink-0 self-stretch pt-1">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${isToday ? 'bg-indigo-500' : 'bg-c4/40'}`} />
-                      {idx < histRows.length - 1 && (
-                        <div className="w-px flex-1 mt-1" style={{ backgroundColor: 'var(--cbrd)' }} />
-                      )}
-                    </div>
-                    {/* Content */}
-                    <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[14px] font-semibold tabular-nums ${isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-c2'}`}>
-                          {label}
-                        </span>
-                        {isToday && <span className="badge-indigo">сьогодні</span>}
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-[14px] font-bold text-c1 tabular-nums">{row.total} шт</span>
-                        <svg
-                          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          className={`text-c4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                        >
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Expanded: per-employee breakdown */}
-                  {isOpen && (
-                    <div className="px-5 pb-3 ml-5" style={{ borderTop: '1px solid var(--cbrd)' }}>
-                      <div className="pt-2 space-y-1">
-                        {row.byEmp.map(emp => (
-                          <div key={emp.name} className="flex items-center justify-between py-1">
-                            <span className="text-[13px] text-c3">{emp.name}</span>
-                            <span className="text-[13px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                              {emp.total} шт
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+      {/* Close shift */}
+      {confirmed.size > 0 && !shiftClosed && (
+        <div className="card p-4 flex items-center justify-between gap-4"
+             style={{ borderColor: 'rgba(16,185,129,0.25)', backgroundColor: 'rgba(16,185,129,0.04)' }}>
+          <div>
+            <p className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
+              {confirmed.size} з {workers} працівників зафіксовано
+            </p>
+            <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/60 mt-0.5">
+              Закрийте зміну — виробіток збережеться до фактичного залишку складу
+            </p>
           </div>
-        )}
-      </div>
+          <button
+            type="button"
+            onClick={closeShift}
+            disabled={closing}
+            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold
+                       text-white transition-all disabled:opacity-50"
+            style={{ backgroundColor: '#059669' }}
+            onMouseEnter={e => { if (!closing) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#047857'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#059669'; }}
+          >
+            {closing ? (
+              <span>Зберігаємо...</span>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Закрити зміну
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {shiftClosed && (
+        <div className="card p-4 flex items-center gap-3"
+             style={{ borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.06)' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <div>
+            <p className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">Зміну закрито</p>
+            <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/60 mt-0.5">
+              Виробіток збережено до складу. Оновіть сторінку — план перерахується від нових залишків.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Print modal */}
       {printIndex !== null && (
