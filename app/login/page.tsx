@@ -1,9 +1,8 @@
 'use client';
 import { useState, useRef, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 function LoginForm() {
-  const router       = useRouter();
   const searchParams = useSearchParams();
   const [input, setInput]     = useState('');
   const [error, setError]     = useState(false);
@@ -15,18 +14,25 @@ function LoginForm() {
   async function submit() {
     if (!input || loading) return;
     setLoading(true);
-    const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: input }),
-    });
-    if (res.ok) {
-      router.replace(searchParams.get('from') || '/dashboard');
-    } else {
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: input }),
+      });
+      if (res.ok) {
+        // Hard redirect so cookie is sent with the next request
+        window.location.href = searchParams.get('from') || '/dashboard';
+      } else {
+        setError(true);
+        setInput('');
+        setLoading(false);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
+    } catch {
       setError(true);
       setInput('');
       setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }
 
@@ -71,7 +77,7 @@ function LoginForm() {
           className="w-full py-3 rounded-xl text-[14px] font-semibold text-white disabled:opacity-40"
           style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
         >
-          {loading ? 'Перевірка...' : 'Увійти'}
+          {loading ? 'Вхід...' : 'Увійти'}
         </button>
       </div>
     </div>
