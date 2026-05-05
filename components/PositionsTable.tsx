@@ -163,9 +163,6 @@ export default function PositionsTable({ positions }: Props) {
                           {actual}
                           <EditIcon />
                         </span>
-                        {p.stockDate && (
-                          <span className="text-[10px] text-c4 tabular-nums">{p.stockDate}</span>
-                        )}
                       </div>
                     )}
                   </td>
