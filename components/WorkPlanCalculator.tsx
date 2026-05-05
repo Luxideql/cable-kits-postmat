@@ -363,6 +363,9 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   const [confirmed, setConfirmed]   = useState<Set<number>>(new Set());
   const [confirming, setConfirming] = useState<number | null>(null);
   const [printIndex, setPrintIndex] = useState<number | 'all' | null>(null);
+  const [histDate, setHistDate]     = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [histReports, setHistReports] = useState<{ employeeId: string; positionId: string; qty: number }[] | null>(null);
+  const [histLoading, setHistLoading] = useState(false);
 
   // Keep names + empIds arrays in sync with workers count
   useEffect(() => {
@@ -384,6 +387,16 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, workerNames, selectedEmpIds }));
   }, [workers, planPerWorker, workerNames, selectedEmpIds]);
+
+  useEffect(() => {
+    setHistLoading(true);
+    setHistReports(null);
+    fetch(`/api/reports?date=${histDate}`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setHistReports(d.reports ?? []); })
+      .catch(() => setHistReports([]))
+      .finally(() => setHistLoading(false));
+  }, [histDate]);
 
   function getFact(workerIdx: number, posId: string, plannedQty: number): number {
     const key = `${workerIdx}-${posId}`;
@@ -448,6 +461,23 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     () => distribute(positions, workers, planPerWorker),
     [positions, workers, planPerWorker]
   );
+
+  const histGrouped = useMemo(() => {
+    if (!histReports) return [];
+    const empMap = new Map<string, { name: string; posMap: Map<string, { lengthMm: number; qty: number }>; total: number }>();
+    for (const r of histReports) {
+      const name = employees.find(e => e.id === r.employeeId)?.fullName ?? r.employeeId;
+      const pos  = positions.find(p => p.id === r.positionId);
+      if (!empMap.has(r.employeeId)) empMap.set(r.employeeId, { name, posMap: new Map(), total: 0 });
+      const entry = empMap.get(r.employeeId)!;
+      if (!entry.posMap.has(r.positionId)) entry.posMap.set(r.positionId, { lengthMm: pos?.lengthMm ?? 0, qty: 0 });
+      entry.posMap.get(r.positionId)!.qty += r.qty;
+      entry.total += r.qty;
+    }
+    return Array.from(empMap.values())
+      .map(e => ({ name: e.name, rows: Array.from(e.posMap.values()).sort((a, b) => a.lengthMm - b.lengthMm), total: e.total }))
+      .sort((a, b) => b.total - a.total);
+  }, [histReports, employees, positions]);
 
   function updateName(i: number, name: string) {
     setWorkerNames(prev => { const n = [...prev]; n[i] = name; return n; });
@@ -725,6 +755,89 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
           </div>
         </div>
       )}
+
+      {/* History log */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cbrd)' }}>
+          <div>
+            <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Журнал виробітку</p>
+            <p className="text-[11px] text-c4 mt-0.5">Фіксування за обраний день</p>
+          </div>
+          <input
+            type="date"
+            value={histDate}
+            onChange={e => setHistDate(e.target.value)}
+            className="text-[13px] font-medium text-c1 bg-transparent outline-none"
+            style={{ border: '1px solid var(--cbrd)', borderRadius: '8px', padding: '4px 10px' }}
+          />
+        </div>
+
+        {histLoading && (
+          <div className="px-5 py-8 text-center text-[13px] text-c4">Завантаження...</div>
+        )}
+
+        {!histLoading && histReports !== null && histReports.length === 0 && (
+          <div className="px-5 py-8 text-center text-[13px] text-c4">Фіксувань за цей день немає</div>
+        )}
+
+        {!histLoading && histGrouped.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-separate border-spacing-0">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
+                  <th className="th text-left">Працівник</th>
+                  <th className="th text-right">Позиція</th>
+                  <th className="th text-right">Кількість</th>
+                </tr>
+              </thead>
+              <tbody>
+                {histGrouped.map((emp, ei) =>
+                  emp.rows.map((row, ri) => {
+                    const isFirstRow = ri === 0;
+                    const isLastRow  = ri === emp.rows.length - 1;
+                    const isLastEmp  = ei === histGrouped.length - 1;
+                    const showBorder = !(isLastRow && isLastEmp);
+                    return (
+                      <tr key={`${ei}-${ri}`}
+                          style={showBorder ? { borderBottom: `1px solid var(--cbrd)` } : {}}
+                          className={isLastRow && !isLastEmp ? '' : ''}>
+                        <td className="px-4 py-2.5">
+                          {isFirstRow ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500/50 shrink-0" />
+                              <span className="text-[13px] font-semibold text-c1">{emp.name}</span>
+                              <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold tabular-nums ml-1">
+                                {emp.total} шт
+                              </span>
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <span className="text-[13px] text-c3">{row.lengthMm} мм</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <span className="text-[14px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                            {row.qty} шт
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid var(--cbrd)' }}>
+                  <td className="px-4 py-2.5 text-[12px] font-bold uppercase tracking-wide text-c4">Разом</td>
+                  <td />
+                  <td className="px-4 py-2.5 text-right text-[15px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
+                    {histGrouped.reduce((s, e) => s + e.total, 0)} шт
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Print modal */}
       {printIndex !== null && (
