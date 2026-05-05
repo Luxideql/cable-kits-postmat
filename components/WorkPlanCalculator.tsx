@@ -363,9 +363,10 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   const [confirmed, setConfirmed]   = useState<Set<number>>(new Set());
   const [confirming, setConfirming] = useState<number | null>(null);
   const [printIndex, setPrintIndex] = useState<number | 'all' | null>(null);
-  const [histDate, setHistDate]     = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [histReports, setHistReports] = useState<{ employeeId: string; positionId: string; qty: number }[] | null>(null);
+  const [histRows, setHistRows]   = useState<{ date: string; total: number; byEmp: { name: string; total: number }[] }[]>([]);
   const [histLoading, setHistLoading] = useState(false);
+  const [histKey, setHistKey]     = useState(0);
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
   // Keep names + empIds arrays in sync with workers count
   useEffect(() => {
@@ -390,13 +391,31 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
 
   useEffect(() => {
     setHistLoading(true);
-    setHistReports(null);
-    fetch(`/api/reports?date=${histDate}`)
+    fetch('/api/reports')
       .then(r => r.json())
-      .then(d => { if (d.success) setHistReports(d.reports ?? []); })
-      .catch(() => setHistReports([]))
+      .then(d => {
+        if (!d.success) return;
+        const reports: { date: string; employeeId: string; qty: number }[] = d.reports ?? [];
+        const dateMap = new Map<string, Map<string, number>>();
+        for (const r of reports) {
+          if (!dateMap.has(r.date)) dateMap.set(r.date, new Map());
+          const em = dateMap.get(r.date)!;
+          em.set(r.employeeId, (em.get(r.employeeId) ?? 0) + r.qty);
+        }
+        const rows = Array.from(dateMap.entries())
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .map(([date, em]) => ({
+            date,
+            total: Array.from(em.values()).reduce((s, v) => s + v, 0),
+            byEmp: Array.from(em.entries())
+              .map(([id, total]) => ({ name: employees.find(e => e.id === id)?.fullName ?? id, total }))
+              .sort((a, b) => b.total - a.total),
+          }));
+        setHistRows(rows);
+      })
+      .catch(() => {})
       .finally(() => setHistLoading(false));
-  }, [histDate]);
+  }, [histKey, employees]);
 
   function getFact(workerIdx: number, posId: string, plannedQty: number): number {
     const key = `${workerIdx}-${posId}`;
@@ -424,6 +443,7 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
         });
       }));
       setConfirmed(prev => { const s = new Set(prev); s.add(workerIdx); return s; });
+      setHistKey(k => k + 1);
     } finally {
       setConfirming(null);
     }
@@ -462,22 +482,6 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     [positions, workers, planPerWorker]
   );
 
-  const histGrouped = useMemo(() => {
-    if (!histReports) return [];
-    const empMap = new Map<string, { name: string; posMap: Map<string, { lengthMm: number; qty: number }>; total: number }>();
-    for (const r of histReports) {
-      const name = employees.find(e => e.id === r.employeeId)?.fullName ?? r.employeeId;
-      const pos  = positions.find(p => p.id === r.positionId);
-      if (!empMap.has(r.employeeId)) empMap.set(r.employeeId, { name, posMap: new Map(), total: 0 });
-      const entry = empMap.get(r.employeeId)!;
-      if (!entry.posMap.has(r.positionId)) entry.posMap.set(r.positionId, { lengthMm: pos?.lengthMm ?? 0, qty: 0 });
-      entry.posMap.get(r.positionId)!.qty += r.qty;
-      entry.total += r.qty;
-    }
-    return Array.from(empMap.values())
-      .map(e => ({ name: e.name, rows: Array.from(e.posMap.values()).sort((a, b) => a.lengthMm - b.lengthMm), total: e.total }))
-      .sort((a, b) => b.total - a.total);
-  }, [histReports, employees, positions]);
 
   function updateName(i: number, name: string) {
     setWorkerNames(prev => { const n = [...prev]; n[i] = name; return n; });
@@ -756,85 +760,82 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
         </div>
       )}
 
-      {/* History log */}
+      {/* History log — chronological */}
       <div className="card overflow-hidden">
-        <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cbrd)' }}>
-          <div>
-            <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Журнал виробітку</p>
-            <p className="text-[11px] text-c4 mt-0.5">Фіксування за обраний день</p>
-          </div>
-          <input
-            type="date"
-            value={histDate}
-            onChange={e => setHistDate(e.target.value)}
-            className="text-[13px] font-medium text-c1 bg-transparent outline-none"
-            style={{ border: '1px solid var(--cbrd)', borderRadius: '8px', padding: '4px 10px' }}
-          />
+        <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
+          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Журнал виробітку</p>
+          <p className="text-[11px] text-c4 mt-0.5">Хронологія запущеного у роботу</p>
         </div>
 
         {histLoading && (
           <div className="px-5 py-8 text-center text-[13px] text-c4">Завантаження...</div>
         )}
 
-        {!histLoading && histReports !== null && histReports.length === 0 && (
-          <div className="px-5 py-8 text-center text-[13px] text-c4">Фіксувань за цей день немає</div>
+        {!histLoading && histRows.length === 0 && (
+          <div className="px-5 py-8 text-center text-[13px] text-c4">Фіксувань ще немає</div>
         )}
 
-        {!histLoading && histGrouped.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
-                  <th className="th text-left">Працівник</th>
-                  <th className="th text-right">Позиція</th>
-                  <th className="th text-right">Кількість</th>
-                </tr>
-              </thead>
-              <tbody>
-                {histGrouped.map((emp, ei) =>
-                  emp.rows.map((row, ri) => {
-                    const isFirstRow = ri === 0;
-                    const isLastRow  = ri === emp.rows.length - 1;
-                    const isLastEmp  = ei === histGrouped.length - 1;
-                    const showBorder = !(isLastRow && isLastEmp);
-                    return (
-                      <tr key={`${ei}-${ri}`}
-                          style={showBorder ? { borderBottom: `1px solid var(--cbrd)` } : {}}
-                          className={isLastRow && !isLastEmp ? '' : ''}>
-                        <td className="px-4 py-2.5">
-                          {isFirstRow ? (
-                            <div className="flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500/50 shrink-0" />
-                              <span className="text-[13px] font-semibold text-c1">{emp.name}</span>
-                              <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold tabular-nums ml-1">
-                                {emp.total} шт
-                              </span>
-                            </div>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          <span className="text-[13px] text-c3">{row.lengthMm} мм</span>
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          <span className="text-[14px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                            {row.qty} шт
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-              <tfoot>
-                <tr style={{ borderTop: '2px solid var(--cbrd)' }}>
-                  <td className="px-4 py-2.5 text-[12px] font-bold uppercase tracking-wide text-c4">Разом</td>
-                  <td />
-                  <td className="px-4 py-2.5 text-right text-[15px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                    {histGrouped.reduce((s, e) => s + e.total, 0)} шт
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+        {!histLoading && histRows.length > 0 && (
+          <div className="divide-y" style={{ borderColor: 'var(--cbrd)' }}>
+            {histRows.map((row, idx) => {
+              const [y, m, d] = row.date.split('-');
+              const label = `${d}.${m}.${y}`;
+              const isToday = row.date === new Date().toISOString().split('T')[0];
+              const isOpen  = expandedDate === row.date;
+              return (
+                <div key={row.date}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedDate(isOpen ? null : row.date)}
+                    className="w-full flex items-center gap-3 px-5 py-3 text-left transition-colors"
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                  >
+                    {/* Timeline dot */}
+                    <div className="flex flex-col items-center shrink-0 self-stretch pt-1">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${isToday ? 'bg-indigo-500' : 'bg-c4/40'}`} />
+                      {idx < histRows.length - 1 && (
+                        <div className="w-px flex-1 mt-1" style={{ backgroundColor: 'var(--cbrd)' }} />
+                      )}
+                    </div>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[14px] font-semibold tabular-nums ${isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-c2'}`}>
+                          {label}
+                        </span>
+                        {isToday && <span className="badge-indigo">сьогодні</span>}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-[14px] font-bold text-c1 tabular-nums">{row.total} шт</span>
+                        <svg
+                          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                          className={`text-c4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                        >
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Expanded: per-employee breakdown */}
+                  {isOpen && (
+                    <div className="px-5 pb-3 ml-5" style={{ borderTop: '1px solid var(--cbrd)' }}>
+                      <div className="pt-2 space-y-1">
+                        {row.byEmp.map(emp => (
+                          <div key={emp.name} className="flex items-center justify-between py-1">
+                            <span className="text-[13px] text-c3">{emp.name}</span>
+                            <span className="text-[13px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                              {emp.total} шт
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
