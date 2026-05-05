@@ -9,8 +9,11 @@ type PositionRow = {
   available: number;
 };
 
+type Employee = { id: string; fullName: string };
+
 type Props = {
   positions: PositionRow[];
+  employees?: Employee[];
 };
 
 const LS_KEY = 'workplan_v3';
@@ -342,7 +345,7 @@ function PrintModal({
   );
 }
 
-export default function WorkPlanCalculator({ positions }: Props) {
+export default function WorkPlanCalculator({ positions, employees = [] }: Props) {
   const saved = useMemo(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY) ?? 'null'); } catch { return null; }
   }, []);
@@ -352,20 +355,66 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const [workerNames, setWorkerNames]     = useState<string[]>(
     Array.from({ length: saved?.workers ?? 3 }, (_, i) => saved?.workerNames?.[i] ?? '')
   );
+  const [selectedEmpIds, setSelectedEmpIds] = useState<string[]>(
+    Array.from({ length: saved?.workers ?? 3 }, (_, i) => saved?.selectedEmpIds?.[i] ?? '')
+  );
+  // factMap key = `${workerIdx}-${posId}`, value = actual qty (pre-filled with planned)
+  const [factMap, setFactMap]       = useState<Record<string, number>>({});
+  const [confirmed, setConfirmed]   = useState<Set<number>>(new Set());
+  const [confirming, setConfirming] = useState<number | null>(null);
   const [printIndex, setPrintIndex] = useState<number | 'all' | null>(null);
 
-  // Keep names array in sync with workers count
+  // Keep names + empIds arrays in sync with workers count
   useEffect(() => {
     setWorkerNames(prev => {
       if (prev.length === workers) return prev;
       if (prev.length < workers) return [...prev, ...Array(workers - prev.length).fill('')];
       return prev.slice(0, workers);
     });
-  }, [workers]);
+    setSelectedEmpIds(prev => {
+      if (prev.length === workers) return prev;
+      if (prev.length < workers) return [...prev, ...Array(workers - prev.length).fill('')];
+      return prev.slice(0, workers);
+    });
+    // Reset confirmations when plan changes
+    setConfirmed(new Set());
+    setFactMap({});
+  }, [workers, planPerWorker]);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, workerNames }));
-  }, [workers, planPerWorker, workerNames]);
+    localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, workerNames, selectedEmpIds }));
+  }, [workers, planPerWorker, workerNames, selectedEmpIds]);
+
+  function getFact(workerIdx: number, posId: string, plannedQty: number): number {
+    const key = `${workerIdx}-${posId}`;
+    return factMap[key] ?? plannedQty;
+  }
+
+  function setFact(workerIdx: number, posId: string, val: number) {
+    setFactMap(prev => ({ ...prev, [`${workerIdx}-${posId}`]: val }));
+  }
+
+  async function confirmWorker(workerIdx: number) {
+    const empId = selectedEmpIds[workerIdx];
+    if (!empId) { alert('Оберіть працівника перед фіксацією'); return; }
+    const tasks = workerTasks[workerIdx];
+    if (!tasks.length) return;
+    setConfirming(workerIdx);
+    try {
+      await Promise.all(tasks.map(t => {
+        const qty = getFact(workerIdx, t.posId, t.qty);
+        if (qty <= 0) return Promise.resolve();
+        return fetch('/api/reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId: empId, positionId: t.posId, qty }),
+        });
+      }));
+      setConfirmed(prev => { const s = new Set(prev); s.add(workerIdx); return s; });
+    } finally {
+      setConfirming(null);
+    }
+  }
 
   const today = new Date().toLocaleDateString('uk-UA', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -401,11 +450,15 @@ export default function WorkPlanCalculator({ positions }: Props) {
   );
 
   function updateName(i: number, name: string) {
-    setWorkerNames(prev => {
-      const next = [...prev];
-      next[i] = name;
-      return next;
-    });
+    setWorkerNames(prev => { const n = [...prev]; n[i] = name; return n; });
+  }
+
+  function updateEmpId(i: number, id: string) {
+    setSelectedEmpIds(prev => { const n = [...prev]; n[i] = id; return n; });
+    // Auto-fill name from employee list
+    const emp = employees.find(e => e.id === id);
+    if (emp) updateName(i, emp.fullName);
+    setConfirmed(prev => { const s = new Set(prev); s.delete(i); return s; });
   }
 
   return (
@@ -477,29 +530,47 @@ export default function WorkPlanCalculator({ positions }: Props) {
       {/* Worker cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {workerTasks.map((tasks, i) => {
-          const workerTotal = tasks.reduce((s, t) => s + t.qty, 0);
+          const plannedTotal = tasks.reduce((s, t) => s + t.qty, 0);
+          const factTotal    = tasks.reduce((s, t) => s + getFact(i, t.posId, t.qty), 0);
+          const isDone       = confirmed.has(i);
+          const isConfirming = confirming === i;
           return (
             <div key={i} className="card overflow-hidden">
               {/* Header */}
               <div className="px-4 py-3"
                    style={{ borderBottom: '1px solid var(--cbrd)', backgroundColor: 'var(--csr2)' }}>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold text-white
-                                    bg-gradient-to-br from-indigo-500 to-purple-600 shrink-0">
-                      {i + 1}
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold text-white shrink-0
+                                    ${isDone ? 'bg-gradient-to-br from-emerald-500 to-emerald-600' : 'bg-gradient-to-br from-indigo-500 to-purple-600'}`}>
+                      {isDone ? '✓' : i + 1}
                     </div>
-                    <input
-                      type="text"
-                      value={workerNames[i] ?? ''}
-                      onChange={e => updateName(i, e.target.value)}
-                      placeholder={`Працівник ${i + 1}`}
-                      className="flex-1 min-w-0 bg-transparent text-[14px] font-semibold text-c1
-                                 outline-none placeholder:text-c4 placeholder:font-normal"
-                    />
+                    {employees.length > 0 ? (
+                      <select
+                        value={selectedEmpIds[i] ?? ''}
+                        onChange={e => updateEmpId(i, e.target.value)}
+                        disabled={isDone}
+                        className="flex-1 min-w-0 bg-transparent text-[14px] font-semibold text-c1 outline-none"
+                        style={{ border: 'none' }}
+                      >
+                        <option value="">— Оберіть працівника —</option>
+                        {employees.map(e => (
+                          <option key={e.id} value={e.id}>{e.fullName}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={workerNames[i] ?? ''}
+                        onChange={e => updateName(i, e.target.value)}
+                        placeholder={`Працівник ${i + 1}`}
+                        className="flex-1 min-w-0 bg-transparent text-[14px] font-semibold text-c1
+                                   outline-none placeholder:text-c4 placeholder:font-normal"
+                      />
+                    )}
                   </div>
-                  <span className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums shrink-0 ml-2">
-                    {workerTotal} шт
+                  <span className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums shrink-0">
+                    {plannedTotal} шт
                   </span>
                 </div>
                 <p className="text-[11px] text-c4 mt-1 ml-9">{today}</p>
@@ -510,9 +581,28 @@ export default function WorkPlanCalculator({ positions }: Props) {
                 {tasks.length === 0 ? (
                   <p className="px-4 py-3 text-[13px] text-c4">Завдань немає</p>
                 ) : tasks.map(t => (
-                  <div key={t.posId} className="flex items-center justify-between px-4 py-2.5">
-                    <span className="text-[13px] text-c3">{t.lengthMm} мм</span>
-                    <span className="text-[15px] font-bold text-c1 tabular-nums">{t.qty} шт</span>
+                  <div key={t.posId} className="flex items-center justify-between px-4 py-2">
+                    <span className="text-[13px] text-c3 shrink-0">{t.lengthMm} мм</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-c4 tabular-nums">план {t.qty}</span>
+                      {isDone ? (
+                        <span className="text-[14px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums w-14 text-right">
+                          {getFact(i, t.posId, t.qty)} шт
+                        </span>
+                      ) : (
+                        <input
+                          type="number"
+                          min={0}
+                          value={getFact(i, t.posId, t.qty)}
+                          onChange={e => {
+                            const v = parseInt(e.target.value);
+                            if (!isNaN(v) && v >= 0) setFact(i, t.posId, v);
+                          }}
+                          className="w-14 text-right text-[14px] font-bold text-c1 bg-transparent outline-none
+                                     tabular-nums border-b border-indigo-400/40"
+                        />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -520,15 +610,35 @@ export default function WorkPlanCalculator({ positions }: Props) {
               {/* Footer */}
               <div className="px-4 py-2.5 flex items-center justify-between"
                    style={{ borderTop: '2px solid var(--cbrd)', backgroundColor: 'var(--csr2)' }}>
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Разом</span>
                 <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-c4">Разом</span>
                   <span className="text-[15px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                    {workerTotal} шт
+                    {factTotal} шт
                   </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isDone ? (
+                    <span className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      ✓ Зафіксовано
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => confirmWorker(i)}
+                      disabled={isConfirming || !selectedEmpIds[i]}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold
+                                 text-white transition-all disabled:opacity-40"
+                      style={{ backgroundColor: '#059669' }}
+                      onMouseEnter={e => { if (!isConfirming && selectedEmpIds[i]) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#047857'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#059669'; }}
+                    >
+                      {isConfirming ? '...' : '✓ Зафіксувати'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setPrintIndex(i)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium
                                text-indigo-600 dark:text-indigo-400 transition-colors"
                     style={{ border: '1px solid var(--cbrd)' }}
                     onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
