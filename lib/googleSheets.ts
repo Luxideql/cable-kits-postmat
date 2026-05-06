@@ -33,12 +33,15 @@ export async function sheetBatchGet(ranges: string[]): Promise<Row[][]> {
   return (res.data.valueRanges ?? []).map(r => (r.values ?? []) as Row[]);
 }
 
-// Create a sheet with headers if it doesn't already exist
+// Create a sheet with headers if it doesn't already exist.
+// Also fixes headers if they are wrong (e.g. data ended up in row 1 instead of headers).
 export async function sheetEnsure(sheetName: string, headers: string[]): Promise<void> {
   const sheets = client();
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID, fields: 'sheets.properties.title' });
-  const exists = (meta.data.sheets ?? []).some(s => s.properties?.title === sheetName);
-  if (!exists) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID, fields: 'sheets.properties.title,sheets.properties.sheetId' });
+  const sheet = (meta.data.sheets ?? []).find(s => s.properties?.title === sheetName);
+
+  if (!sheet) {
+    // Create sheet + write headers
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       requestBody: { requests: [{ addSheet: { properties: { title: sheetName } } }] },
@@ -49,7 +52,37 @@ export async function sheetEnsure(sheetName: string, headers: string[]): Promise
       valueInputOption: 'RAW',
       requestBody: { values: [headers] },
     });
+    return;
   }
+
+  // Sheet exists — check if row 1 is correct headers
+  const firstRow = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A1:1`,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  const row1 = ((firstRow.data.values ?? [[]])[0] ?? []) as string[];
+  if (row1[0] === 'id') return; // headers already correct
+
+  // Row 1 is not 'id' — insert a new row 1 with correct headers
+  const sheetId = sheet.properties?.sheetId ?? 0;
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [{
+        insertDimension: {
+          range: { sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+          inheritFromBefore: false,
+        },
+      }],
+    },
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A1`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [headers] },
+  });
 }
 
 // Append a single row
