@@ -2,7 +2,7 @@ import {
   sheetGet, sheetBatchGet, sheetAppend, sheetUpdate, sheetUpdateFormula, sheetUpsert, sheetEnsure, rowsToObjects,
 } from './googleSheets';
 import { calcKitStats } from './calculations';
-import type { Employee, Position, ProductionPlan, DailyReport, KitStats, PositionStats, Shipment, WorkCard } from './types';
+import type { Employee, Position, ProductionPlan, DailyReport, KitStats, PositionStats, Shipment, WorkCard, Material } from './types';
 import { getTodayDate } from './calculations';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -313,6 +313,79 @@ export async function updateWorkCard(
   if (updates.status !== undefined) {
     await sheetUpdate(`WorkCards!F${idx + 1}`, [[updates.status]]);
   }
+}
+
+// ─── Materials ────────────────────────────────────────────────────────────────
+// Columns: id | назва | одиниця | кількість_на_комплект | альт_назва | альт_кількість
+//          | запас_осн | фактичний_осн | запас_альт | фактичний_альт | примітка | активний
+
+const MATERIAL_HEADERS = [
+  'id', 'назва', 'одиниця', 'кількість_на_комплект',
+  'альт_назва', 'альт_кількість',
+  'запас_осн', 'фактичний_осн', 'запас_альт', 'фактичний_альт',
+  'примітка', 'активний',
+];
+
+function parseMaterial(r: Record<string, string>): Material {
+  return {
+    id: r.id,
+    name: r.назва,
+    unit: r.одиниця || 'шт',
+    qtyPerKit: Number(r['кількість_на_комплект']) || 0,
+    altName: r['альт_назва'] || '',
+    altQtyPerKit: Number(r['альт_кількість']) || 0,
+    stockMain: Number(r['запас_осн']) || 0,
+    stockActual: Number(r['фактичний_осн']) || 0,
+    stockAlt: Number(r['запас_альт']) || 0,
+    stockAltActual: Number(r['фактичний_альт']) || 0,
+    note: r.примітка || '',
+  };
+}
+
+export async function getMaterials(): Promise<Material[]> {
+  try {
+    const rows = await sheetGet('Матеріали!A:L');
+    return rowsToObjects(rows)
+      .filter(r => r.id && r.активний !== 'false')
+      .map(parseMaterial);
+  } catch { return []; }
+}
+
+export async function addMaterial(m: Omit<Material, 'id'>): Promise<{ id: string }> {
+  await sheetEnsure('Матеріали', MATERIAL_HEADERS);
+  const id = genId('mat');
+  await sheetAppend('Матеріали!A:L', [
+    id, m.name, m.unit, String(m.qtyPerKit),
+    m.altName || '', String(m.altQtyPerKit || 0),
+    String(m.stockMain || 0), String(m.stockActual || 0),
+    String(m.stockAlt || 0), String(m.stockAltActual || 0),
+    m.note || '', 'true',
+  ]);
+  return { id };
+}
+
+export async function updateMaterial(id: string, updates: Partial<Omit<Material, 'id'>>): Promise<void> {
+  const rows = await sheetGet('Матеріали!A:L');
+  const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
+  if (idx < 1) return;
+  const cur = parseMaterial(
+    Object.fromEntries(MATERIAL_HEADERS.map((h, i) => [h, rows[idx][i] ?? '']))
+  );
+  const u = { ...cur, ...updates };
+  await sheetUpdate(`Матеріали!A${idx + 1}:L${idx + 1}`, [[
+    u.id, u.name, u.unit, String(u.qtyPerKit),
+    u.altName || '', String(u.altQtyPerKit || 0),
+    String(u.stockMain || 0), String(u.stockActual || 0),
+    String(u.stockAlt || 0), String(u.stockAltActual || 0),
+    u.note || '', 'true',
+  ]]);
+}
+
+export async function deleteMaterial(id: string): Promise<void> {
+  const rows = await sheetGet('Матеріали!A:A');
+  const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
+  if (idx < 1) return;
+  await sheetUpdate(`Матеріали!L${idx + 1}`, [['false']]);
 }
 
 // ─── Add report + reset state in one function (2 parallel API calls) ──────────
