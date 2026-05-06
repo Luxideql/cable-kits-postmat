@@ -2,10 +2,11 @@ import StatsCard from '@/components/StatsCard';
 import PositionsTable from '@/components/PositionsTable';
 import InfoTooltip from '@/components/InfoTooltip';
 import BarChart from '@/components/BarChart';
-import { getKitStats, getDailyReports, getShipments } from '@/lib/data';
+import { getKitStats, getDailyReports, getShipments, getWorkCards } from '@/lib/data';
 import { getTodayDate, formatDate } from '@/lib/calculations';
 import type { DayBar } from '@/components/BarChart';
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,23 +40,32 @@ export default async function DashboardPage() {
   let todayTotal = 0, activeWorkers = 0;
   let allDays: DayBar[] = [];
   let recentShipments: Awaited<ReturnType<typeof getShipments>> = [];
+  let cardsTodayQty = 0, cardsTodayCount = 0, cardsWeekQty = 0;
   let error = '';
 
   const MONTHS_SHORT = ['Січ','Лют','Бер','Кві','Тра','Чер','Лип','Сер','Вер','Жов','Лис','Гру'];
 
   try {
-    const [stats, allReports, shipments] = await Promise.all([
+    const [stats, allReports, shipments, allCards] = await Promise.all([
       getKitStats(),
       getDailyReports(),
       getShipments(),
+      getWorkCards(),
     ]);
     kitStats = stats;
     recentShipments = shipments.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
 
     const today = getTodayDate();
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
     const todayR = allReports.filter(r => r.date === today);
     todayTotal    = todayR.reduce((s, r) => s + r.qty, 0);
     activeWorkers = new Set(todayR.map(r => r.employeeId)).size;
+
+    const confirmedCards = allCards.filter(c => c.status === 'confirmed');
+    const cardQty = (c: typeof confirmedCards[0]) => c.tasks.reduce((s, t) => s + t.actualQty, 0);
+    cardsTodayQty   = confirmedCards.filter(c => c.date === today).reduce((s, c) => s + cardQty(c), 0);
+    cardsTodayCount = confirmedCards.filter(c => c.date === today).length;
+    cardsWeekQty    = confirmedCards.filter(c => c.date >= weekAgo).reduce((s, c) => s + cardQty(c), 0);
 
     // Build all-time daily chart data
     const dateMap = new Map<string, number>();
@@ -153,6 +163,27 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Cards stat block */}
+      <Link href="/cardstats" className="block">
+        <div className="card p-4 flex items-center justify-between gap-4 transition-colors"
+             onMouseEnter={undefined}
+             style={{ cursor: 'pointer' }}>
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                 style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-c1">Карточки виробітку</p>
+              <p className="text-[11px] text-c4 mt-0.5">Сьогодні: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{cardsTodayQty} шт</span> · {cardsTodayCount} карт · Тиждень: <span className="font-semibold text-c2">{cardsWeekQty} шт</span></p>
+            </div>
+          </div>
+          <span className="text-[12px] text-indigo-500 font-medium shrink-0">Статистика →</span>
+        </div>
+      </Link>
 
       {/* Chart row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

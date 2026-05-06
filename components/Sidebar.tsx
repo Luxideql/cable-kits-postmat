@@ -80,6 +80,7 @@ const NAV = [
   { href: '/kits',       label: 'Комплекти',   icon: Icon.Box        },
   { href: '/production', label: 'Виробіток',   icon: Icon.Layers     },
   { href: '/workplan',   label: 'Норма',        icon: Icon.Target     },
+  { href: '/cardstats',  label: 'Карточки',     icon: Icon.Trend      },
   { href: '/planning',   label: 'Планування',  icon: Icon.Calendar   },
   { href: '/analytics',  label: 'Аналітика',   icon: Icon.Trend      },
   { href: '/forecast',   label: 'Прогноз',     icon: Icon.Calculator },
