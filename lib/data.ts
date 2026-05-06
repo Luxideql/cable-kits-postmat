@@ -344,6 +344,7 @@ function parseMaterial(r: Record<string, string>): Material {
 
 export async function getMaterials(): Promise<Material[]> {
   try {
+    await sheetEnsure('Матеріали', MATERIAL_HEADERS);
     const rows = await sheetGet('Матеріали!A:L');
     return rowsToObjects(rows)
       .filter(r => r.id && r.активний !== 'false')
