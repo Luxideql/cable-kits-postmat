@@ -249,7 +249,7 @@ export async function getContext(tgId: string): Promise<{
   employee: Employee | null;
   botState: { state: string; data: string } | null;
 }> {
-  const [empRows, stateRows] = await sheetBatchGet(['Працівники!A:E', 'BotState!A:D']);
+  const [empRows, stateRows] = await sheetBatchGet(['Працівники!A:G', 'BotState!A:D']);
 
   const employees = rowsToObjects(empRows).filter(e => e.активний !== 'false');
   const empRow = employees.find(e => e.telegram_id === tgId);
