@@ -1,6 +1,7 @@
 'use client';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import StatsCard from './StatsCard';
+import InfoTooltip from './InfoTooltip';
 
 type PositionRow = {
   id: string;
@@ -623,6 +624,14 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     <div className="space-y-4">
 
       {/* Stats cards */}
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">Прогноз зміни</p>
+        <InfoTooltip>
+          <p><b>Загальний виробіток</b> — скільки штук зроблять усі працівники разом за зміну (працівники × план).</p>
+          <p><b>Готових комплектів</b> — скільки повних комплектів буде після зміни з урахуванням поточного складу.</p>
+          <p><b>Приріст за зміну</b> — на скільки комплектів більше стане після зміни порівняно з тим що є зараз.</p>
+        </InfoTooltip>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatsCard
           title="Загальний виробіток"
@@ -665,7 +674,15 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
       {/* Inputs */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">Параметри</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">Параметри</p>
+            <InfoTooltip>
+              <p><b>Кількість працівників</b> — скільки людей працює у зміні. Система створить окрему карточку на кожного.</p>
+              <p><b>План на 1 прац.</b> — скільки штук повинен зробити один працівник за зміну.</p>
+              <p><b>Звіт дозволено / заблоковано</b> — якщо заблоковано, кнопка "Зафіксувати" недоступна. Вмикайте тільки коли карточки готові до фіксації.</p>
+              <p><b>Друкувати</b> — роздрукувати завдання для всіх працівників на аркушах A4.</p>
+            </InfoTooltip>
+          </div>
           <div className="flex items-center gap-2">
             {/* Reporting toggle */}
             <button
@@ -710,6 +727,16 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
       </div>
 
       {/* Worker cards */}
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-c4">Карточки працівників</p>
+        <InfoTooltip>
+          <p><b>▶ Видати в роботу</b> — фіксує що завдання передано працівнику. Карточка зберігається в таблиці зі статусом "видано".</p>
+          <p><b>Фактична кількість</b> — після виконання можна змінити цифру якщо зроблено більше або менше ніж план.</p>
+          <p><b>✓ Зафіксувати</b> — записує виробіток на склад одразу. Залишки оновлюються в реальному часі.</p>
+          <p><b>Скасувати</b> — відміняє карточку. Якщо вже зафіксована — склад відкочується назад.</p>
+          <p><b>Колір значка:</b> синій = не видано, жовтий = в роботі, зелений = зафіксовано.</p>
+        </InfoTooltip>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {workerTasks.map((tasks, i) => {
           const plannedTotal = tasks.reduce((s, t) => s + t.qty, 0);
@@ -889,9 +916,18 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
       {/* Deficit breakdown table */}
       {deficitRows.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
-            <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Розподіл по позиціях</p>
-            <p className="text-[11px] text-c4 mt-0.5">Тільки дефіцитні позиції отримують завдання</p>
+          <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cbrd)' }}>
+            <div>
+              <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Розподіл по позиціях</p>
+              <p className="text-[11px] text-c4 mt-0.5">Тільки дефіцитні позиції отримують завдання</p>
+            </div>
+            <InfoTooltip>
+              <p><b>Пріоритет (червоний)</b> — вузьке місце: ця позиція має найменше комплектів і стримує весь випуск.</p>
+              <p><b>Поповнення (синій)</b> — позиція теж дефіцитна, але не критична — завдання є.</p>
+              <p><b>Достатньо (сірий)</b> — цієї позиції вже вистачає, завдання не розподіляється.</p>
+              <p><b>Зараз компл.</b> — скільки повних комплектів є по цій позиції прямо зараз.</p>
+              <p><b>Буде компл.</b> — скільки буде після виробітку цієї зміни.</p>
+            </InfoTooltip>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full border-separate border-spacing-0">
@@ -975,7 +1011,16 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
       {/* History section */}
       <div className="card overflow-hidden">
         <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cbrd)' }}>
-          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Журнал карточок</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Журнал карточок</p>
+            <InfoTooltip>
+              <p><b>Журнал</b> — архів всіх карточок по датах. Оберіть дату і натисніть "Завантажити".</p>
+              <p><b>Видано (жовтий)</b> — карточку передано в роботу але ще не зафіксовано.</p>
+              <p><b>Зафіксовано (зелений)</b> — виробіток записано на склад.</p>
+              <p><b>Скасовано (червоний)</b> — карточку відмінено. Якщо була зафіксована — склад відкочено назад.</p>
+              <p><b>Скасувати</b> — доступно для будь-якої не скасованої карточки будь-якого дня.</p>
+            </InfoTooltip>
+          </div>
           <div className="flex items-center gap-2">
             <input
               type="date"
