@@ -337,7 +337,7 @@ const MATERIAL_HEADERS = [
   'Кількість на 1 комплект',
   'Альтернативна позиція',
   'Альт. кількість на 1 компл.',
-  'Запас основний',
+  'Закуплено',
   'Фактичний залишок складу — осн.',
   'Запас альтернативний',
   'Факт. залишок складу — альт.',
@@ -346,8 +346,8 @@ const MATERIAL_HEADERS = [
 ];
 
 function parseMaterial(r: Record<string, string>): Material {
-  const g = (a: string, b: string) => r[a] || r[b] || '';
-  const n = (a: string, b: string) => Number(r[a] || r[b]) || 0;
+  const g = (...keys: string[]) => keys.map(k => r[k]).find(v => v) || '';
+  const n = (...keys: string[]) => Number(keys.map(k => r[k]).find(v => v)) || 0;
   return {
     id: r.id,
     name:           g('Назва матеріалу',              'назва'),
@@ -355,7 +355,7 @@ function parseMaterial(r: Record<string, string>): Material {
     qtyPerKit:      n('Кількість на 1 комплект',      'кількість_на_комплект'),
     altName:        g('Альтернативна позиція',         'альт_назва'),
     altQtyPerKit:   n('Альт. кількість на 1 компл.',  'альт_кількість'),
-    stockMain:      n('Запас основний',               'запас_осн'),
+    stockMain:      n('Закуплено', 'Запас основний', 'запас_осн'),
     stockActual:    n('Фактичний залишок складу — осн.', 'фактичний_осн'),
     stockAlt:       n('Запас альтернативний',         'запас_альт'),
     stockAltActual: n('Факт. залишок складу — альт.', 'фактичний_альт'),

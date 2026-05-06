@@ -211,7 +211,7 @@ export default function MaterialsClient({
           <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
             <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Розрахунок по матеріалах</p>
             <p className="text-[11px] text-c4 mt-0.5">
-              Автосписання від {kitsProduced} вироблених компл. · Запас: основний → альтернативний · натисніть на цифру для редагування
+              Автосписання від {kitsProduced} вироблених компл. · Закуплено → альтернатива · натисніть на цифру для редагування
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -220,7 +220,7 @@ export default function MaterialsClient({
                 <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
                   <th className="th text-left min-w-[160px] sticky left-0 z-10" style={{ backgroundColor: 'var(--csr)' }}>Матеріал</th>
                   <th className="th text-center min-w-[72px]">На 1 компл.</th>
-                  <th className="th text-center min-w-[88px]">Запас осн.</th>
+                  <th className="th text-center min-w-[88px]">Закуплено</th>
                   <th className="th text-center min-w-[80px]">Залишок осн.</th>
                   <th className="th text-center min-w-[96px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>
                     Інв. осн.<br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
@@ -259,7 +259,7 @@ export default function MaterialsClient({
                         <span className="text-[13px] tabular-nums text-c2">{c.qtyPerKit}</span>
                       </td>
 
-                      {/* Запас осн. (editable) */}
+                      {/* Закуплено (editable) */}
                       <StockCell id={c.id} field="stockMain" value={c.stockMain} saving={saving} onSave={patchStock} />
 
                       {/* Залишок осн. (calculated) */}
@@ -381,7 +381,7 @@ export default function MaterialsClient({
             <span className="flex items-center gap-1.5 text-[11px] text-c4">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Вузьке місце
             </span>
-            <span className="text-[11px] text-c4">· Запас осн./альт. — натисніть для редагування · Залишок — автоматично після списання {kitsProduced} компл.</span>
+            <span className="text-[11px] text-c4">· Закуплено/Запас альт. — натисніть для редагування · Залишок — автоматично після списання {kitsProduced} компл.</span>
           </div>
         </div>
       )}
@@ -417,7 +417,7 @@ export default function MaterialsClient({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Запас основний">
+                <FormField label="Закуплено (кількість закупівлі)">
                   <input type="number" min={0} className={inputCls}
                     value={form.stockMain || ''}
                     onChange={e => setForm(f => ({ ...f, stockMain: Number(e.target.value) || 0 }))}
