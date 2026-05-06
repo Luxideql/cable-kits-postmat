@@ -1011,6 +1011,97 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
         </div>
       )}
 
+      {/* Card stats table */}
+      {(() => {
+        const done = historyCards.filter(c => c.status === 'confirmed');
+        if (done.length === 0) return null;
+        const dates = Array.from(new Set(done.map(c => c.date))).sort((a, b) => b.localeCompare(a));
+        const emps  = Array.from(new Set(done.map(c => c.employeeName)));
+        const matrix: Record<string, Record<string, number>> = {};
+        for (const card of done) {
+          if (!matrix[card.employeeName]) matrix[card.employeeName] = {};
+          const qty = card.tasks.reduce((s, t) => s + t.actualQty, 0);
+          matrix[card.employeeName][card.date] = (matrix[card.employeeName][card.date] ?? 0) + qty;
+        }
+        return (
+          <div className="card overflow-hidden">
+            <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cbrd)' }}>
+              <div className="flex items-center gap-2">
+                <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Статистика по карточках</p>
+                <InfoTooltip>
+                  <p>Тільки <b>зафіксовані</b> карточки. Показує скільки штук зафіксував кожен працівник по кожному дню.</p>
+                  <p><b>Разом</b> — загальна кількість по всіх днях для цього працівника.</p>
+                </InfoTooltip>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-separate border-spacing-0">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
+                    <th className="th text-left sticky left-0 z-10 min-w-[140px]" style={{ backgroundColor: 'var(--csr)' }}>
+                      Працівник
+                    </th>
+                    {dates.map(d => (
+                      <th key={d} className="th text-center px-3 min-w-[80px] tabular-nums">
+                        {d.slice(5).replace('-', '.')}
+                      </th>
+                    ))}
+                    <th className="th text-right px-4 min-w-[64px]">Разом</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {emps.map((emp, i) => {
+                    const total = dates.reduce((s, d) => s + (matrix[emp]?.[d] ?? 0), 0);
+                    const isLast = i === emps.length - 1;
+                    return (
+                      <tr key={emp} style={!isLast ? { borderBottom: '1px solid var(--cbrd)' } : {}}>
+                        <td className="px-4 py-2.5 sticky left-0 z-10 text-[13px] font-medium text-c2"
+                            style={{ backgroundColor: 'var(--csr)' }}>
+                          {emp}
+                        </td>
+                        {dates.map(d => {
+                          const qty = matrix[emp]?.[d] ?? 0;
+                          return (
+                            <td key={d} className="px-3 py-2.5 text-center">
+                              {qty > 0
+                                ? <span className="text-[14px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{qty}</span>
+                                : <span className="text-[12px] text-c4">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className="px-4 py-2.5 text-right">
+                          <span className="text-[14px] font-bold tabular-nums text-c1">{total}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Day totals */}
+                  <tr style={{ borderTop: '1px solid var(--cbrd)', backgroundColor: 'var(--csr2)' }}>
+                    <td className="px-4 py-2 sticky left-0 z-10 text-[11px] font-bold uppercase tracking-wide text-c4"
+                        style={{ backgroundColor: 'var(--csr2)' }}>
+                      Разом
+                    </td>
+                    {dates.map(d => {
+                      const dayTotal = emps.reduce((s, e) => s + (matrix[e]?.[d] ?? 0), 0);
+                      return (
+                        <td key={d} className="px-3 py-2 text-center">
+                          <span className="text-[12px] font-bold tabular-nums text-c2">{dayTotal}</span>
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-2 text-right">
+                      <span className="text-[14px] font-bold tabular-nums text-indigo-600 dark:text-indigo-400">
+                        {emps.reduce((s, e) => s + dates.reduce((ds, d) => ds + (matrix[e]?.[d] ?? 0), 0), 0)}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* History section */}
       <div className="card overflow-hidden">
         <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cbrd)' }}>
