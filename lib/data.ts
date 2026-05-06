@@ -362,13 +362,11 @@ function parseMaterial(r: Record<string, string>): Material {
 }
 
 export async function getMaterials(): Promise<Material[]> {
-  try {
-    await sheetEnsure('Матеріали', MATERIAL_HEADERS);
-    const rows = await sheetGet('Матеріали!A:L');
-    return rowsToObjects(rows)
-      .filter(r => r.id && r['Активний'] !== 'false')
-      .map(parseMaterial);
-  } catch { return []; }
+  await sheetEnsure('Матеріали', MATERIAL_HEADERS);
+  const rows = await sheetGet('Матеріали!A:L');
+  return rowsToObjects(rows)
+    .filter(r => r.id && r['Активний'] !== 'false')
+    .map(parseMaterial);
 }
 
 export async function addMaterial(m: Omit<Material, 'id'>): Promise<{ id: string }> {
