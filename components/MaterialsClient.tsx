@@ -399,13 +399,13 @@ export default function MaterialsClient({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Запас (основний)">
+                <FormField label="Запас основний">
                   <input type="number" min={0} className={inputCls}
                     value={form.stockMain || ''}
                     onChange={e => setForm(f => ({ ...f, stockMain: Number(e.target.value) || 0 }))}
                     placeholder="0" />
                 </FormField>
-                <FormField label="Факт. залишок складу">
+                <FormField label="Факт. залишок складу (ручний)">
                   <input type="number" min={0} className={inputCls}
                     value={form.stockActual || ''}
                     onChange={e => setForm(f => ({ ...f, stockActual: Number(e.target.value) || 0 }))}
