@@ -350,16 +350,12 @@ function parseMaterial(r: Record<string, string>): Material {
   const n = (...keys: string[]) => Number(keys.map(k => r[k]).find(v => v)) || 0;
   return {
     id: r.id,
-    name:           g('Назва матеріалу',              'назва'),
-    unit:           g('Одиниця виміру',               'одиниця') || 'шт',
-    qtyPerKit:      n('Кількість на 1 комплект',      'кількість_на_комплект'),
-    altName:        g('Альтернативна позиція',         'альт_назва'),
-    altQtyPerKit:   n('Альт. кількість на 1 компл.',  'альт_кількість'),
-    stockMain:      n('Закуплено', 'Запас основний', 'запас_осн'),
-    stockActual:    n('Фактичний залишок складу — осн.', 'фактичний_осн'),
-    stockAlt:       n('Запас альтернативний',         'запас_альт'),
-    stockAltActual: n('Факт. залишок складу — альт.', 'фактичний_альт'),
-    note:           g('Примітка',                     'примітка'),
+    name:        g('Назва матеріалу', 'назва'),
+    unit:        g('Одиниця виміру', 'одиниця') || 'шт',
+    qtyPerKit:   n('Кількість на 1 комплект', 'кількість_на_комплект'),
+    stockMain:   n('Закуплено', 'Запас основний', 'запас_осн'),
+    stockActual: n('Фактичний залишок складу — осн.', 'Фактичний залишок складу', 'фактичний_осн'),
+    note:        g('Примітка', 'примітка'),
   };
 }
 
@@ -376,9 +372,9 @@ export async function addMaterial(m: Omit<Material, 'id'>): Promise<{ id: string
   const id = genId('mat');
   await sheetAppend('Матеріали!A:L', [
     id, m.name, m.unit, String(m.qtyPerKit),
-    m.altName || '', String(m.altQtyPerKit || 0),
+    '', '0',
     String(m.stockMain || 0), String(m.stockActual || 0),
-    String(m.stockAlt || 0), String(m.stockAltActual || 0),
+    '0', '0',
     m.note || '', 'true',
   ]);
   return { id };
@@ -388,24 +384,24 @@ export async function updateMaterial(id: string, updates: Partial<Omit<Material,
   const rows = await sheetGet('Матеріали!A:L');
   const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
   if (idx < 1) return;
-  const cur = parseMaterial(
-    Object.fromEntries(MATERIAL_HEADERS.map((h, i) => [h, rows[idx][i] ?? '']))
-  );
+  const cur = parseMaterial(rowsToObjects(rows).find(r => r.id === id) ?? {});
   const u = { ...cur, ...updates };
   await sheetUpdate(`Матеріали!A${idx + 1}:L${idx + 1}`, [[
     u.id, u.name, u.unit, String(u.qtyPerKit),
-    u.altName || '', String(u.altQtyPerKit || 0),
+    '', '0',
     String(u.stockMain || 0), String(u.stockActual || 0),
-    String(u.stockAlt || 0), String(u.stockAltActual || 0),
+    '0', '0',
     u.note || '', 'true',
   ]]);
 }
 
 export async function deleteMaterial(id: string): Promise<void> {
-  const rows = await sheetGet('Матеріали!A:A');
+  const rows = await sheetGet('Матеріали!A:L');
   const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
   if (idx < 1) return;
-  await sheetUpdate(`Матеріали!M${idx + 1}`, [['false']]);
+  const activeColIdx = (rows[0] ?? []).indexOf('Активний');
+  const col = activeColIdx >= 0 ? String.fromCharCode(65 + activeColIdx) : 'L';
+  await sheetUpdate(`Матеріали!${col}${idx + 1}`, [['false']]);
 }
 
 // ─── Add report + reset state in one function (2 parallel API calls) ──────────

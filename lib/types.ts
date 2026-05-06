@@ -89,12 +89,8 @@ export interface Material {
   id: string;
   name: string;
   unit: string;
-  qtyPerKit: number;      // норма на 1 комплект (основна)
-  altName: string;        // альтернативна позиція
-  altQtyPerKit: number;   // норма альт. на 1 комплект
-  stockMain: number;      // запас_осн: початковий/оновлений запас
-  stockActual: number;    // фактичний_осн: ручний підрахунок
-  stockAlt: number;       // запас_альт
-  stockAltActual: number; // фактичний_альт
+  qtyPerKit: number;
+  stockMain: number;
+  stockActual: number;
   note: string;
 }

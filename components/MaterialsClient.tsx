@@ -6,55 +6,32 @@ import type { Material } from '@/lib/types';
 // ── Calculation ────────────────────────────────────────────────────────────────
 
 interface MatCalc extends Material {
-  usedMain: number;
   remainMain: number;
-  usedAlt: number;
-  remainAlt: number;
-  kitsFromMain: number;
-  kitsFromAlt: number;
-  totalKitsLeft: number;
+  kitsLeft: number;
   deficit: number;
   isBottleneck: boolean;
   status: 'ok' | 'low' | 'critical' | 'deficit';
 }
 
 function calcMat(m: Material, kitsProduced: number, planKits: number): MatCalc {
-  const kitsMainMax = m.qtyPerKit > 0 ? Math.floor(m.stockMain / m.qtyPerKit) : 0;
-
-  let usedMain: number;
-  let usedAlt: number;
-
-  if (kitsProduced <= kitsMainMax) {
-    usedMain = kitsProduced * m.qtyPerKit;
-    usedAlt = 0;
-  } else {
-    usedMain = m.stockMain;
-    const extraKits = kitsProduced - kitsMainMax;
-    usedAlt = m.altQtyPerKit > 0 ? extraKits * m.altQtyPerKit : 0;
-  }
-
-  const remainMain = Math.max(0, m.stockMain - usedMain);
-  const remainAlt  = Math.max(0, m.stockAlt - usedAlt);
-  const kitsFromMain = m.qtyPerKit > 0    ? Math.floor(remainMain / m.qtyPerKit)    : 0;
-  const kitsFromAlt  = m.altQtyPerKit > 0 ? Math.floor(remainAlt  / m.altQtyPerKit) : 0;
-  const totalKitsLeft = kitsFromMain + kitsFromAlt;
-  const deficit = planKits > 0 ? Math.max(0, planKits - kitsProduced - totalKitsLeft) : 0;
+  const used      = m.qtyPerKit > 0 ? Math.min(m.stockMain, kitsProduced * m.qtyPerKit) : 0;
+  const remainMain = Math.max(0, m.stockMain - used);
+  const kitsLeft   = m.qtyPerKit > 0 ? Math.floor(remainMain / m.qtyPerKit) : 0;
+  const deficit    = planKits > 0 ? Math.max(0, planKits - kitsProduced - kitsLeft) : 0;
 
   let status: MatCalc['status'] = 'ok';
   if (deficit > 0)          status = 'deficit';
-  else if (totalKitsLeft < 10) status = 'critical';
-  else if (totalKitsLeft < 50) status = 'low';
+  else if (kitsLeft < 10)   status = 'critical';
+  else if (kitsLeft < 50)   status = 'low';
 
-  return { ...m, usedMain, remainMain, usedAlt, remainAlt, kitsFromMain, kitsFromAlt, totalKitsLeft, deficit, isBottleneck: false, status };
+  return { ...m, remainMain, kitsLeft, deficit, isBottleneck: false, status };
 }
 
 // ── Form default ──────────────────────────────────────────────────────────────
 
 const EMPTY: Omit<Material, 'id'> = {
   name: '', unit: 'шт', qtyPerKit: 1,
-  altName: '', altQtyPerKit: 0,
   stockMain: 0, stockActual: 0,
-  stockAlt: 0, stockAltActual: 0,
   note: '',
 };
 
@@ -67,27 +44,27 @@ export default function MaterialsClient({
   initialMaterials: Material[];
   kitsProduced: number;
 }) {
-  const [mats, setMats]       = useState<Material[]>(initialMaterials);
-  const [tab, setTab]         = useState<'data' | 'inventory'>('data');
+  const [mats, setMats]         = useState<Material[]>(initialMaterials);
+  const [tab, setTab]           = useState<'data' | 'inventory'>('data');
   const [planKits, setPlanKits] = useState(() =>
     typeof window !== 'undefined' ? Number(localStorage.getItem('mat_plan_v1') || '0') : 0
   );
-  const [saving, setSaving]   = useState<string | null>(null);
+  const [saving, setSaving]     = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [editMat, setEditMat] = useState<Material | null>(null);
-  const [form, setForm]       = useState<Omit<Material, 'id'>>(EMPTY);
+  const [editMat, setEditMat]   = useState<Material | null>(null);
+  const [form, setForm]         = useState<Omit<Material, 'id'>>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
 
   // ── Calculations ──────────────────────────────────────────────────────────
 
   const calced = mats.map(m => calcMat(m, kitsProduced, planKits));
   if (calced.length > 0) {
-    const minKits = Math.min(...calced.map(c => c.totalKitsLeft));
-    calced.forEach(c => { c.isBottleneck = c.totalKitsLeft === minKits; });
+    const minKits = Math.min(...calced.map(c => c.kitsLeft));
+    calced.forEach(c => { c.isBottleneck = c.kitsLeft === minKits; });
   }
   const deficitCount = calced.filter(c => c.deficit > 0).length;
   const bottleneck   = calced.find(c => c.isBottleneck);
-  const minKits      = calced.length > 0 ? Math.min(...calced.map(c => c.totalKitsLeft)) : 0;
+  const minKits      = calced.length > 0 ? Math.min(...calced.map(c => c.kitsLeft)) : 0;
 
   // ── Plan ──────────────────────────────────────────────────────────────────
 
@@ -115,7 +92,7 @@ export default function MaterialsClient({
   const openAdd = () => { setEditMat(null); setForm(EMPTY); setShowForm(true); };
   const openEdit = (m: Material) => {
     setEditMat(m);
-    setForm({ name: m.name, unit: m.unit, qtyPerKit: m.qtyPerKit, altName: m.altName, altQtyPerKit: m.altQtyPerKit, stockMain: m.stockMain, stockActual: m.stockActual, stockAlt: m.stockAlt, stockAltActual: m.stockAltActual, note: m.note });
+    setForm({ name: m.name, unit: m.unit, qtyPerKit: m.qtyPerKit, stockMain: m.stockMain, stockActual: m.stockActual, note: m.note });
     setShowForm(true);
   };
   const closeForm = () => { setShowForm(false); setEditMat(null); setForm(EMPTY); };
@@ -186,10 +163,10 @@ export default function MaterialsClient({
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Матеріалів',      value: mats.length,   sub: 'позицій',        color: '' },
-          { label: 'Дефіцит',         value: deficitCount,  sub: 'потребує поповнення', color: deficitCount > 0 ? 'text-red-500' : 'text-emerald-500' },
-          { label: 'Мін. комплектів', value: calced.length > 0 ? minKits : '—', sub: bottleneck?.name || 'немає даних', color: '' },
-          { label: 'Вироблено',       value: kitsProduced,  sub: 'комплектів',     color: '' },
+          { label: 'Матеріалів',      value: mats.length,                              sub: 'позицій',             color: '' },
+          { label: 'Дефіцит',         value: deficitCount,                             sub: 'потребує поповнення', color: deficitCount > 0 ? 'text-red-500' : 'text-emerald-500' },
+          { label: 'Мін. комплектів', value: calced.length > 0 ? minKits : '—',        sub: bottleneck?.name || 'немає даних', color: '' },
+          { label: 'Вироблено',       value: kitsProduced,                             sub: 'комплектів',          color: '' },
         ].map(({ label, value, sub, color }) => (
           <div key={label} className="card-hover p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 mb-2">{label}</p>
@@ -230,28 +207,21 @@ export default function MaterialsClient({
           <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
             <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Розрахунок по матеріалах</p>
             <p className="text-[11px] text-c4 mt-0.5">
-              Автосписання від {kitsProduced} вироблених компл. · Закуплено → альтернатива · натисніть на цифру для редагування
+              Автосписання від {kitsProduced} вироблених компл. · натисніть на цифру для редагування
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0" style={{ minWidth: '860px' }}>
+            <table className="min-w-full border-separate border-spacing-0">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
-                  <th className="th text-left min-w-[160px] sticky left-0 z-10" style={{ backgroundColor: 'var(--csr)' }}>Матеріал</th>
+                  <th className="th text-left min-w-[180px] sticky left-0 z-10" style={{ backgroundColor: 'var(--csr)' }}>Матеріал</th>
                   <th className="th text-center min-w-[72px]">На 1 компл.</th>
                   <th className="th text-center min-w-[88px]">Закуплено</th>
-                  <th className="th text-center min-w-[80px]">Залишок осн.</th>
+                  <th className="th text-center min-w-[88px]">Залишок</th>
                   <th className="th text-center min-w-[96px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>
-                    Інв. осн.<br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
+                    Інв. підрахунок<br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
                   </th>
-                  <th className="th text-center min-w-[80px]">Компл. з осн.</th>
-                  <th className="th text-center min-w-[130px]">Альтернатива</th>
-                  <th className="th text-center min-w-[88px]">Запас альт.</th>
-                  <th className="th text-center min-w-[96px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>
-                    Інв. альт.<br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
-                  </th>
-                  <th className="th text-center min-w-[80px]">Компл. з альт.</th>
-                  <th className="th text-center min-w-[80px]">Всього</th>
+                  <th className="th text-center min-w-[80px]">Компл.</th>
                   <th className="th text-center min-w-[80px]">Дефіцит</th>
                   <th className="th text-center min-w-[64px]">Дії</th>
                 </tr>
@@ -281,82 +251,30 @@ export default function MaterialsClient({
                       {/* Закуплено (editable) */}
                       <StockCell id={c.id} field="stockMain" value={c.stockMain} saving={saving} onSave={patchStock} />
 
-                      {/* Залишок осн. (calculated) */}
+                      {/* Залишок (calculated) */}
                       <td className="px-3 py-3 text-center">
-                        <span className={`text-[13px] tabular-nums font-medium
-                          ${c.remainMain === 0 ? 'text-red-500' : 'text-c2'}`}>
+                        <span className={`text-[13px] tabular-nums font-medium ${c.remainMain === 0 ? 'text-red-500' : 'text-c2'}`}>
                           {c.remainMain}
                         </span>
-                        {c.usedMain > 0 && (
-                          <p className="text-[10px] text-c4 mt-0.5">−{c.usedMain} вик.</p>
+                        {c.stockMain - c.remainMain > 0 && (
+                          <p className="text-[10px] text-c4 mt-0.5">−{c.stockMain - c.remainMain} вик.</p>
                         )}
                       </td>
 
-                      {/* Інвентаризація осн. */}
+                      {/* Інвентаризація */}
                       <InvCell
                         id={c.id} field="stockActual" value={c.stockActual}
                         calcRemain={c.remainMain} saving={saving} onSave={patchStock}
                       />
 
-                      {/* Компл. з осн. */}
+                      {/* Компл. */}
                       <td className="px-3 py-3 text-center">
                         <span className={`inline-flex items-center justify-center px-2 h-7 min-w-[36px] rounded-lg
                           text-[13px] font-semibold tabular-nums
-                          ${c.kitsFromMain > 0
+                          ${c.kitsLeft > 0
                             ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/10'
                             : 'text-red-600 dark:text-red-400 bg-red-500/10'}`}>
-                          {c.kitsFromMain}
-                        </span>
-                      </td>
-
-                      {/* Альтернатива */}
-                      <td className="px-3 py-3 text-center">
-                        {c.altName ? (
-                          <div>
-                            <p className="text-[12px] text-c2 truncate max-w-[120px]">{c.altName}</p>
-                            <p className="text-[10px] text-c4">{c.altQtyPerKit} / компл.</p>
-                          </div>
-                        ) : (
-                          <span className="text-[12px] text-c4">—</span>
-                        )}
-                      </td>
-
-                      {/* Запас альт. (editable if alt exists) */}
-                      {c.altName
-                        ? <StockCell id={c.id} field="stockAlt" value={c.stockAlt} saving={saving} onSave={patchStock} />
-                        : <td className="px-3 py-3 text-center"><span className="text-[12px] text-c4">—</span></td>
-                      }
-
-                      {/* Інвентаризація альт. */}
-                      {c.altName
-                        ? <InvCell id={c.id} field="stockAltActual" value={c.stockAltActual} calcRemain={c.remainAlt} saving={saving} onSave={patchStock} />
-                        : <td className="px-3 py-3 text-center" style={{ borderLeft: '2px solid var(--cbrd)' }}><span className="text-[12px] text-c4">—</span></td>
-                      }
-
-                      {/* Компл. з альт. */}
-                      <td className="px-3 py-3 text-center">
-                        {c.altName ? (
-                          c.kitsFromAlt > 0 ? (
-                            <span className="inline-flex items-center justify-center px-2 h-7 min-w-[36px] rounded-lg
-                              text-[13px] font-semibold tabular-nums
-                              text-indigo-700 dark:text-indigo-300 bg-indigo-500/10">
-                              {c.kitsFromAlt}
-                            </span>
-                          ) : (
-                            <span className="text-[13px] tabular-nums text-red-500">0</span>
-                          )
-                        ) : (
-                          <span className="text-[12px] text-c4">—</span>
-                        )}
-                      </td>
-
-                      {/* Всього */}
-                      <td className="px-3 py-3 text-center">
-                        <span className={`text-[16px] font-bold tabular-nums
-                          ${c.totalKitsLeft === 0 ? 'text-red-500'
-                            : c.status === 'critical' ? 'text-amber-600 dark:text-amber-400'
-                            : 'text-c1'}`}>
-                          {c.totalKitsLeft}
+                          {c.kitsLeft}
                         </span>
                       </td>
 
@@ -400,7 +318,7 @@ export default function MaterialsClient({
             <span className="flex items-center gap-1.5 text-[11px] text-c4">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Вузьке місце
             </span>
-            <span className="text-[11px] text-c4">· Закуплено/Запас альт. — натисніть для редагування · Залишок — автоматично після списання {kitsProduced} компл.</span>
+            <span className="text-[11px] text-c4">· Закуплено — натисніть для редагування · Залишок — автоматично після списання {kitsProduced} компл.</span>
           </div>
         </div>
       ) : null}
@@ -423,21 +341,16 @@ export default function MaterialsClient({
               <table className="min-w-full border-separate border-spacing-0">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
-                    <th className="th text-left min-w-[180px] sticky left-0 z-10" style={{ backgroundColor: 'var(--csr)' }}>Матеріал</th>
-                    <th className="th text-center min-w-[100px]">Розрахунковий залишок</th>
-                    <th className="th text-center min-w-[110px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>Факт. підрахунок</th>
-                    <th className="th text-center min-w-[90px]">Відхилення</th>
-                    <th className="th text-center min-w-[100px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>Альтернатива</th>
-                    <th className="th text-center min-w-[100px]">Розрах. залишок альт.</th>
-                    <th className="th text-center min-w-[110px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>Факт. підрахунок альт.</th>
-                    <th className="th text-center min-w-[90px]">Відхилення альт.</th>
+                    <th className="th text-left min-w-[200px] sticky left-0 z-10" style={{ backgroundColor: 'var(--csr)' }}>Матеріал</th>
+                    <th className="th text-center min-w-[120px]">Розрахунковий залишок</th>
+                    <th className="th text-center min-w-[120px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>Факт. підрахунок</th>
+                    <th className="th text-center min-w-[110px]">Відхилення</th>
                   </tr>
                 </thead>
                 <tbody>
                   {calced.map((c, i) => {
                     const isLast = i === calced.length - 1;
-                    const diff    = c.stockActual > 0 ? c.stockActual - c.remainMain : null;
-                    const diffAlt = c.altName && c.stockAltActual > 0 ? c.stockAltActual - c.remainAlt : null;
+                    const diff   = c.stockActual > 0 ? c.stockActual - c.remainMain : null;
                     const diffColor = (d: number | null) =>
                       d === null ? 'text-c4' : d > 0 ? 'text-emerald-600 dark:text-emerald-400' : d < 0 ? 'text-red-500' : 'text-c2';
                     return (
@@ -467,41 +380,6 @@ export default function MaterialsClient({
                             </div>
                           ) : (
                             <span className="text-[12px] text-c4">не підраховано</span>
-                          )}
-                        </td>
-                        {/* Альтернатива */}
-                        <td className="px-3 py-3 text-center" style={{ borderLeft: '2px solid var(--cbrd)' }}>
-                          {c.altName ? (
-                            <div>
-                              <p className="text-[12px] font-medium text-c2">{c.altName}</p>
-                              <p className="text-[10px] text-c4">{c.unit}</p>
-                            </div>
-                          ) : <span className="text-[12px] text-c4">—</span>}
-                        </td>
-                        {/* Розрах. залишок альт. */}
-                        <td className="px-3 py-3 text-center">
-                          {c.altName ? (
-                            <span className={`text-[14px] font-semibold tabular-nums ${c.remainAlt === 0 ? 'text-red-500' : 'text-c2'}`}>
-                              {c.remainAlt}
-                            </span>
-                          ) : <span className="text-[12px] text-c4">—</span>}
-                        </td>
-                        {/* Факт. підрахунок альт. */}
-                        {c.altName
-                          ? <InvCell id={c.id} field="stockAltActual" value={c.stockAltActual} calcRemain={c.remainAlt} saving={saving} onSave={patchStock} />
-                          : <td className="px-3 py-3 text-center" style={{ borderLeft: '2px solid var(--cbrd)' }}><span className="text-[12px] text-c4">—</span></td>
-                        }
-                        {/* Відхилення альт. */}
-                        <td className="px-3 py-3 text-center">
-                          {diffAlt !== null ? (
-                            <div>
-                              <span className={`text-[15px] font-bold tabular-nums ${diffColor(diffAlt)}`}>
-                                {diffAlt > 0 ? `+${diffAlt}` : diffAlt}
-                              </span>
-                              <p className="text-[10px] text-c4 mt-0.5">{diffAlt > 0 ? 'надлишок' : diffAlt < 0 ? 'нестача' : 'збіг'}</p>
-                            </div>
-                          ) : (
-                            <span className="text-[12px] text-c4">{c.altName ? 'не підраховано' : '—'}</span>
                           )}
                         </td>
                       </tr>
@@ -545,46 +423,19 @@ export default function MaterialsClient({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Закуплено (кількість закупівлі)">
+                <FormField label="Закуплено (кількість)">
                   <input type="number" min={0} className={inputCls}
                     value={form.stockMain || ''}
                     onChange={e => setForm(f => ({ ...f, stockMain: Number(e.target.value) || 0 }))}
                     placeholder="0" />
                 </FormField>
-                <FormField label="Факт. залишок складу (ручний)">
+                <FormField label="Факт. залишок складу">
                   <input type="number" min={0} className={inputCls}
                     value={form.stockActual || ''}
                     onChange={e => setForm(f => ({ ...f, stockActual: Number(e.target.value) || 0 }))}
                     placeholder="0" />
                 </FormField>
               </div>
-
-              <div className="pt-2" style={{ borderTop: '1px solid var(--cbrd)' }}>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-c4 mb-3">Альтернативна позиція (необов'язково)</p>
-              </div>
-
-              <FormField label="Назва альтернативи">
-                <input className={inputCls} value={form.altName}
-                  onChange={e => setForm(f => ({ ...f, altName: e.target.value }))}
-                  placeholder="необов'язково" />
-              </FormField>
-
-              {form.altName && (
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField label="Альт. на 1 компл.">
-                    <input type="number" min={0} step="any" className={inputCls}
-                      value={form.altQtyPerKit || ''}
-                      onChange={e => setForm(f => ({ ...f, altQtyPerKit: Number(e.target.value) || 0 }))}
-                      placeholder="0" />
-                  </FormField>
-                  <FormField label="Запас альт.">
-                    <input type="number" min={0} className={inputCls}
-                      value={form.stockAlt || ''}
-                      onChange={e => setForm(f => ({ ...f, stockAlt: Number(e.target.value) || 0 }))}
-                      placeholder="0" />
-                  </FormField>
-                </div>
-              )}
 
               <FormField label="Примітка">
                 <input className={inputCls} value={form.note}
