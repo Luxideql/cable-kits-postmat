@@ -372,7 +372,6 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   const [confirmedAccum, setConfirmedAccum] = useState<Map<string, number>>(new Map());
   const [cardIds, setCardIds]               = useState<Record<number, string>>(saved?.cardIds ?? {});
   const [cancelling, setCancelling]         = useState<number | null>(null);
-  const [historyDate, setHistoryDate]       = useState('');
   const [historyCards, setHistoryCards]     = useState<WorkCard[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [reportingOn, setReportingOn] = useState<boolean>(() => {
@@ -447,6 +446,7 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
       });
       const { id } = await res.json();
       setCardIds(prev => ({ ...prev, [workerIdx]: id }));
+      setHistoryCards(prev => [...prev, { id, date: todayISO, employeeName: empName, employeeId: selectedEmpIds[workerIdx] || '', tasks, status: 'issued' }]);
     } catch { /* non-critical — card still issued locally */ }
   }
 
@@ -503,6 +503,7 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'confirmed', tasks: updatedTasks }),
         }).catch(() => {});
+        setHistoryCards(prev => prev.map(c => c.id === cardId ? { ...c, status: 'confirmed', tasks: updatedTasks } : c));
       }
     } finally {
       setConfirming(null);
@@ -544,6 +545,7 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'cancelled' }),
         }).catch(() => {});
+        setHistoryCards(prev => prev.map(c => c.id === cardId ? { ...c, status: 'cancelled' } : c));
         setCardIds(prev => { const n = { ...prev }; delete n[workerIdx]; return n; });
       }
     } finally {
@@ -552,15 +554,16 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   }
 
   async function loadHistory() {
-    if (!historyDate) return;
     setHistoryLoading(true);
     try {
-      const res = await fetch(`/api/workcards?date=${historyDate}`);
+      const res = await fetch('/api/workcards');
       setHistoryCards(await res.json());
     } finally {
       setHistoryLoading(false);
     }
   }
+
+  useEffect(() => { loadHistory(); }, []);
 
   async function cancelHistoryCard(card: WorkCard) {
     if (!confirm(`Скасувати карточку ${card.employeeName}?`)) return;
@@ -1021,74 +1024,73 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
               <p><b>Скасувати</b> — доступно для будь-якої не скасованої карточки будь-якого дня.</p>
             </InfoTooltip>
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={historyDate}
-              onChange={e => setHistoryDate(e.target.value)}
-              className="text-[12px] text-c1 bg-transparent outline-none rounded-lg px-2 py-1"
-              style={{ border: '1px solid var(--cbrd)' }}
-            />
-            <button
-              type="button"
-              onClick={loadHistory}
-              disabled={!historyDate || historyLoading}
-              className="px-3 py-1 rounded-lg text-[12px] font-semibold text-white disabled:opacity-40"
-              style={{ backgroundColor: '#4f46e5' }}
-            >
-              {historyLoading ? '...' : 'Завантажити'}
-            </button>
-          </div>
+          {historyLoading && <span className="text-[12px] text-c4 animate-pulse">Завантаження...</span>}
         </div>
-        {historyCards.length === 0 ? (
-          <p className="px-5 py-4 text-[13px] text-c4">
-            {historyDate ? 'Немає карточок за вибраний день' : 'Оберіть дату для перегляду карточок'}
-          </p>
-        ) : (
-          <div className="divide-y" style={{ borderColor: 'var(--cbrd)' }}>
-            {historyCards.map(card => (
-              <div key={card.id} className="px-5 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-semibold text-c1 truncate">{card.employeeName}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        card.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                        : card.status === 'cancelled' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                      }`}>
-                        {card.status === 'confirmed' ? '✓ зафіксовано' : card.status === 'cancelled' ? '✕ скасовано' : '▶ видано'}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-3 mt-1.5">
-                      {card.tasks.map(t => (
-                        <span key={t.posId} className="text-[12px] text-c3">
-                          {t.lengthMm} мм:&nbsp;
-                          <span className="font-semibold text-c1">{t.actualQty} шт</span>
-                          {t.actualQty !== t.plannedQty && (
-                            <span className="text-c4"> (план {t.plannedQty})</span>
-                          )}
-                        </span>
-                      ))}
-                    </div>
+        {(() => {
+          if (historyLoading) return null;
+          if (historyCards.length === 0) return (
+            <p className="px-5 py-4 text-[13px] text-c4">Карточок ще немає</p>
+          );
+          // group by date, newest first
+          const byDate = new Map<string, WorkCard[]>();
+          for (const c of historyCards) {
+            if (!byDate.has(c.date)) byDate.set(c.date, []);
+            byDate.get(c.date)!.push(c);
+          }
+          const dates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
+          return (
+            <div>
+              {dates.map(date => (
+                <div key={date}>
+                  <div className="px-5 py-2 sticky top-0" style={{ backgroundColor: 'var(--csr2)', borderBottom: '1px solid var(--cbrd)' }}>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-c4">{date}</span>
                   </div>
-                  {card.status !== 'cancelled' && (
-                    <button
-                      type="button"
-                      onClick={() => cancelHistoryCard(card)}
-                      className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors"
-                      style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--cc4)')}
-                    >
-                      Скасувати
-                    </button>
-                  )}
+                  {byDate.get(date)!.map(card => (
+                    <div key={card.id} className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[14px] font-semibold text-c1">{card.employeeName}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              card.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                              : card.status === 'cancelled' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                            }`}>
+                              {card.status === 'confirmed' ? '✓ зафіксовано' : card.status === 'cancelled' ? '✕ скасовано' : '▶ видано'}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-3 mt-1">
+                            {card.tasks.map(t => (
+                              <span key={t.posId} className="text-[12px] text-c3">
+                                {t.lengthMm} мм:&nbsp;
+                                <span className="font-semibold text-c1">{t.actualQty} шт</span>
+                                {t.actualQty !== t.plannedQty && (
+                                  <span className="text-c4"> (план {t.plannedQty})</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        {card.status !== 'cancelled' && (
+                          <button
+                            type="button"
+                            onClick={() => cancelHistoryCard(card)}
+                            className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors"
+                            style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}
+                            onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--cc4)')}
+                          >
+                            Скасувати
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Print modal */}
