@@ -52,6 +52,20 @@ export default async function CardStatsPage() {
   const topEmp      = emps[0];
   const topEmpQty   = topEmp ? empTotals[topEmp] : 0;
 
+  // per-position totals
+  const posTotals: Record<number, { all: number; today: number; week: number }> = {};
+  for (const c of cards) {
+    for (const t of c.tasks) {
+      if (!posTotals[t.lengthMm]) posTotals[t.lengthMm] = { all: 0, today: 0, week: 0 };
+      posTotals[t.lengthMm].all   += t.actualQty;
+      if (c.date === today)   posTotals[t.lengthMm].today += t.actualQty;
+      if (c.date >= weekAgo)  posTotals[t.lengthMm].week  += t.actualQty;
+    }
+  }
+  const posRows = Object.entries(posTotals)
+    .map(([mm, v]) => ({ mm: Number(mm), ...v }))
+    .sort((a, b) => a.mm - b.mm);
+
   return (
     <div className="space-y-5 animate-fade-up">
       {/* Header */}
@@ -81,6 +95,82 @@ export default async function CardStatsPage() {
           </div>
         ))}
       </div>
+
+      {/* Per-position breakdown */}
+      {posRows.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
+            <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">По позиціях (комплекти)</p>
+            <p className="text-[11px] text-c4 mt-0.5">Скільки штук вироблено по кожному розміру · тільки зафіксовані карточки</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-separate border-spacing-0">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
+                  <th className="th text-left min-w-[120px]">Позиція</th>
+                  <th className="th text-center min-w-[90px]">Сьогодні</th>
+                  <th className="th text-center min-w-[90px]">За тиждень</th>
+                  <th className="th text-right min-w-[90px]">Всього</th>
+                </tr>
+              </thead>
+              <tbody>
+                {posRows.map((row, i) => {
+                  const isLast = i === posRows.length - 1;
+                  const pct = allTotal > 0 ? Math.round(row.all / allTotal * 100) : 0;
+                  return (
+                    <tr key={row.mm} style={!isLast ? { borderBottom: '1px solid var(--cbrd)' } : {}}>
+                      <td className="px-4 py-3">
+                        <span className="text-[14px] font-semibold text-c1">{row.mm} мм</span>
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        {row.today > 0 ? (
+                          <span className="inline-flex items-center justify-center px-2.5 h-7 rounded-lg
+                            text-[13px] font-semibold tabular-nums
+                            text-indigo-700 dark:text-indigo-200 bg-indigo-500/10">
+                            {row.today}
+                          </span>
+                        ) : <span className="text-[12px] text-c4">—</span>}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <span className="text-[13px] font-semibold tabular-nums text-c2">{row.week}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-16 h-1.5 rounded-full overflow-hidden hidden sm:block"
+                               style={{ backgroundColor: 'var(--cbrd)' }}>
+                            <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                                 style={{ width: `${Math.max(pct, 2)}%` }} />
+                          </div>
+                          <span className="text-[15px] font-bold tabular-nums text-c1">{row.all}</span>
+                          <span className="text-[11px] text-c4 tabular-nums w-8 text-right">{pct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr style={{ borderTop: '2px solid var(--cbrd)', backgroundColor: 'var(--csr2)' }}>
+                  <td className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-c4">Разом</td>
+                  <td className="px-3 py-2.5 text-center">
+                    <span className="text-[13px] font-bold tabular-nums text-c2">
+                      {posRows.reduce((s, r) => s + r.today, 0)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    <span className="text-[13px] font-bold tabular-nums text-c2">
+                      {posRows.reduce((s, r) => s + r.week, 0)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <span className="text-[15px] font-bold tabular-nums text-indigo-600 dark:text-indigo-400">
+                      {allTotal}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Matrix table */}
       {emps.length === 0 ? (
