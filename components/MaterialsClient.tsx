@@ -68,6 +68,7 @@ export default function MaterialsClient({
   kitsProduced: number;
 }) {
   const [mats, setMats]       = useState<Material[]>(initialMaterials);
+  const [tab, setTab]         = useState<'data' | 'inventory'>('data');
   const [planKits, setPlanKits] = useState(() =>
     typeof window !== 'undefined' ? Number(localStorage.getItem('mat_plan_v1') || '0') : 0
   );
@@ -164,6 +165,24 @@ export default function MaterialsClient({
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-xl" style={{ backgroundColor: 'var(--csr2)', border: '1px solid var(--cbrd)' }}>
+        {([
+          { id: 'data',      label: 'Поточні дані',   sub: 'розрахунок списання' },
+          { id: 'inventory', label: 'Інвентаризація', sub: 'фактичний підрахунок' },
+        ] as const).map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex-1 flex flex-col items-center py-2 px-3 rounded-lg transition-all duration-150 ${
+              tab === t.id
+                ? 'bg-indigo-500 text-white shadow-sm'
+                : 'text-c3 hover:bg-[var(--chov)]'
+            }`}>
+            <span className="text-[13px] font-semibold leading-tight">{t.label}</span>
+            <span className={`text-[10px] leading-tight mt-0.5 ${tab === t.id ? 'text-indigo-200' : 'text-c4'}`}>{t.sub}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
@@ -200,13 +219,13 @@ export default function MaterialsClient({
         )}
       </div>
 
-      {/* Table or empty state */}
-      {mats.length === 0 ? (
+      {/* ── TAB: Поточні дані ── */}
+      {tab === 'data' && mats.length === 0 ? (
         <div className="card p-10 text-center">
           <p className="text-[14px] text-c4">Матеріалів ще немає</p>
           <p className="text-[12px] text-c4 mt-1">Натисніть "+ Додати" щоб додати перший розхідний матеріал</p>
         </div>
-      ) : (
+      ) : tab === 'data' ? (
         <div className="card overflow-hidden">
           <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
             <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Розрахунок по матеріалах</p>
@@ -384,6 +403,115 @@ export default function MaterialsClient({
             <span className="text-[11px] text-c4">· Закуплено/Запас альт. — натисніть для редагування · Залишок — автоматично після списання {kitsProduced} компл.</span>
           </div>
         </div>
+      ) : null}
+
+      {/* ── TAB: Інвентаризація ── */}
+      {tab === 'inventory' && (
+        mats.length === 0 ? (
+          <div className="card p-10 text-center">
+            <p className="text-[14px] text-c4">Матеріалів ще немає</p>
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
+              <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Інвентаризація</p>
+              <p className="text-[11px] text-c4 mt-0.5">
+                Введіть фактичний підрахунок по кожній позиції · відхилення = факт − розрахунок
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-separate border-spacing-0">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
+                    <th className="th text-left min-w-[180px] sticky left-0 z-10" style={{ backgroundColor: 'var(--csr)' }}>Матеріал</th>
+                    <th className="th text-center min-w-[100px]">Розрахунковий залишок</th>
+                    <th className="th text-center min-w-[110px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>Факт. підрахунок</th>
+                    <th className="th text-center min-w-[90px]">Відхилення</th>
+                    <th className="th text-center min-w-[100px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>Альтернатива</th>
+                    <th className="th text-center min-w-[100px]">Розрах. залишок альт.</th>
+                    <th className="th text-center min-w-[110px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>Факт. підрахунок альт.</th>
+                    <th className="th text-center min-w-[90px]">Відхилення альт.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calced.map((c, i) => {
+                    const isLast = i === calced.length - 1;
+                    const diff    = c.stockActual > 0 ? c.stockActual - c.remainMain : null;
+                    const diffAlt = c.altName && c.stockAltActual > 0 ? c.stockAltActual - c.remainAlt : null;
+                    const diffColor = (d: number | null) =>
+                      d === null ? 'text-c4' : d > 0 ? 'text-emerald-600 dark:text-emerald-400' : d < 0 ? 'text-red-500' : 'text-c2';
+                    return (
+                      <tr key={c.id} style={!isLast ? { borderBottom: '1px solid var(--cbrd)' } : {}}>
+                        {/* Матеріал */}
+                        <td className="px-4 py-3 sticky left-0 z-10" style={{ backgroundColor: 'var(--csr)' }}>
+                          <p className="text-[13px] font-semibold text-c1">{c.name}</p>
+                          <p className="text-[11px] text-c4">{c.unit}</p>
+                        </td>
+                        {/* Розрахунковий залишок */}
+                        <td className="px-3 py-3 text-center">
+                          <span className={`text-[14px] font-semibold tabular-nums ${c.remainMain === 0 ? 'text-red-500' : 'text-c2'}`}>
+                            {c.remainMain}
+                          </span>
+                          <p className="text-[10px] text-c4 mt-0.5">{c.unit}</p>
+                        </td>
+                        {/* Факт. підрахунок */}
+                        <InvCell id={c.id} field="stockActual" value={c.stockActual} calcRemain={c.remainMain} saving={saving} onSave={patchStock} />
+                        {/* Відхилення */}
+                        <td className="px-3 py-3 text-center">
+                          {diff !== null ? (
+                            <div>
+                              <span className={`text-[15px] font-bold tabular-nums ${diffColor(diff)}`}>
+                                {diff > 0 ? `+${diff}` : diff}
+                              </span>
+                              <p className="text-[10px] text-c4 mt-0.5">{diff > 0 ? 'надлишок' : diff < 0 ? 'нестача' : 'збіг'}</p>
+                            </div>
+                          ) : (
+                            <span className="text-[12px] text-c4">не підраховано</span>
+                          )}
+                        </td>
+                        {/* Альтернатива */}
+                        <td className="px-3 py-3 text-center" style={{ borderLeft: '2px solid var(--cbrd)' }}>
+                          {c.altName ? (
+                            <div>
+                              <p className="text-[12px] font-medium text-c2">{c.altName}</p>
+                              <p className="text-[10px] text-c4">{c.unit}</p>
+                            </div>
+                          ) : <span className="text-[12px] text-c4">—</span>}
+                        </td>
+                        {/* Розрах. залишок альт. */}
+                        <td className="px-3 py-3 text-center">
+                          {c.altName ? (
+                            <span className={`text-[14px] font-semibold tabular-nums ${c.remainAlt === 0 ? 'text-red-500' : 'text-c2'}`}>
+                              {c.remainAlt}
+                            </span>
+                          ) : <span className="text-[12px] text-c4">—</span>}
+                        </td>
+                        {/* Факт. підрахунок альт. */}
+                        {c.altName
+                          ? <InvCell id={c.id} field="stockAltActual" value={c.stockAltActual} calcRemain={c.remainAlt} saving={saving} onSave={patchStock} />
+                          : <td className="px-3 py-3 text-center" style={{ borderLeft: '2px solid var(--cbrd)' }}><span className="text-[12px] text-c4">—</span></td>
+                        }
+                        {/* Відхилення альт. */}
+                        <td className="px-3 py-3 text-center">
+                          {diffAlt !== null ? (
+                            <div>
+                              <span className={`text-[15px] font-bold tabular-nums ${diffColor(diffAlt)}`}>
+                                {diffAlt > 0 ? `+${diffAlt}` : diffAlt}
+                              </span>
+                              <p className="text-[10px] text-c4 mt-0.5">{diffAlt > 0 ? 'надлишок' : diffAlt < 0 ? 'нестача' : 'збіг'}</p>
+                            </div>
+                          ) : (
+                            <span className="text-[12px] text-c4">{c.altName ? 'не підраховано' : '—'}</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
       )}
 
       {/* Add / Edit Modal */}
