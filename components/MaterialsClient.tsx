@@ -222,9 +222,15 @@ export default function MaterialsClient({
                   <th className="th text-center min-w-[72px]">На 1 компл.</th>
                   <th className="th text-center min-w-[88px]">Запас осн.</th>
                   <th className="th text-center min-w-[80px]">Залишок осн.</th>
+                  <th className="th text-center min-w-[96px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>
+                    Інв. осн.<br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
+                  </th>
                   <th className="th text-center min-w-[80px]">Компл. з осн.</th>
                   <th className="th text-center min-w-[130px]">Альтернатива</th>
                   <th className="th text-center min-w-[88px]">Запас альт.</th>
+                  <th className="th text-center min-w-[96px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>
+                    Інв. альт.<br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
+                  </th>
                   <th className="th text-center min-w-[80px]">Компл. з альт.</th>
                   <th className="th text-center min-w-[80px]">Всього</th>
                   <th className="th text-center min-w-[80px]">Дефіцит</th>
@@ -267,6 +273,12 @@ export default function MaterialsClient({
                         )}
                       </td>
 
+                      {/* Інвентаризація осн. */}
+                      <InvCell
+                        id={c.id} field="stockActual" value={c.stockActual}
+                        calcRemain={c.remainMain} saving={saving} onSave={patchStock}
+                      />
+
                       {/* Компл. з осн. */}
                       <td className="px-3 py-3 text-center">
                         <span className={`inline-flex items-center justify-center px-2 h-7 min-w-[36px] rounded-lg
@@ -294,6 +306,12 @@ export default function MaterialsClient({
                       {c.altName
                         ? <StockCell id={c.id} field="stockAlt" value={c.stockAlt} saving={saving} onSave={patchStock} />
                         : <td className="px-3 py-3 text-center"><span className="text-[12px] text-c4">—</span></td>
+                      }
+
+                      {/* Інвентаризація альт. */}
+                      {c.altName
+                        ? <InvCell id={c.id} field="stockAltActual" value={c.stockAltActual} calcRemain={c.remainAlt} saving={saving} onSave={patchStock} />
+                        : <td className="px-3 py-3 text-center" style={{ borderLeft: '2px solid var(--cbrd)' }}><span className="text-[12px] text-c4">—</span></td>
                       }
 
                       {/* Компл. з альт. */}
@@ -476,6 +494,72 @@ function FormField({ label, required, children }: { label: string; required?: bo
       </label>
       {children}
     </div>
+  );
+}
+
+// ── Inventory cell — editable count + discrepancy vs calculated remain ────────
+
+function InvCell({ id, field, value, calcRemain, saving, onSave }: {
+  id: string;
+  field: keyof Material;
+  value: number;
+  calcRemain: number;
+  saving: string | null;
+  onSave: (id: string, field: keyof Material, value: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState('');
+  const inputRef              = useRef<HTMLInputElement>(null);
+  const isSaving              = saving === id + field;
+
+  const start = () => { setVal(String(value)); setEditing(true); setTimeout(() => inputRef.current?.select(), 0); };
+  const commit = () => {
+    const n = Number(val);
+    if (!isNaN(n) && n !== value) onSave(id, field, n);
+    setEditing(false);
+  };
+
+  const diff = value > 0 ? value - calcRemain : null;
+
+  if (editing) {
+    return (
+      <td className="px-2 py-2 text-center" style={{ borderLeft: '2px solid var(--cbrd)' }}>
+        <input ref={inputRef} type="number" min={0} value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+          className="w-20 px-2 py-1 text-[13px] text-center tabular-nums rounded-lg
+                     border border-amber-400 bg-[var(--csr)] text-c1 outline-none"
+          autoFocus />
+      </td>
+    );
+  }
+
+  return (
+    <td className="px-3 py-3 text-center cursor-pointer group" style={{ borderLeft: '2px solid var(--cbrd)' }}
+        onClick={start} title="Натисніть щоб ввести фактичний підрахунок">
+      {isSaving ? (
+        <span className="text-[12px] text-amber-400 animate-pulse">…</span>
+      ) : value > 0 ? (
+        <div>
+          <span className="text-[13px] tabular-nums font-semibold text-amber-600 dark:text-amber-400
+                           group-hover:text-amber-500 transition-colors border-b border-dashed
+                           border-transparent group-hover:border-amber-400">
+            {value}
+          </span>
+          {diff !== null && (
+            <p className={`text-[10px] mt-0.5 tabular-nums font-semibold
+              ${diff > 0 ? 'text-emerald-500' : diff < 0 ? 'text-red-500' : 'text-c4'}`}>
+              {diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : '='}
+            </p>
+          )}
+        </div>
+      ) : (
+        <span className="text-[11px] text-c4 group-hover:text-amber-400 transition-colors">
+          підрахувати
+        </span>
+      )}
+    </td>
   );
 }
 
