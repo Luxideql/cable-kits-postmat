@@ -346,18 +346,20 @@ const MATERIAL_HEADERS = [
 ];
 
 function parseMaterial(r: Record<string, string>): Material {
+  const g = (a: string, b: string) => r[a] || r[b] || '';
+  const n = (a: string, b: string) => Number(r[a] || r[b]) || 0;
   return {
     id: r.id,
-    name: r['Назва матеріалу'] || '',
-    unit: r['Одиниця виміру'] || 'шт',
-    qtyPerKit: Number(r['Кількість на 1 комплект']) || 0,
-    altName: r['Альтернативна позиція'] || '',
-    altQtyPerKit: Number(r['Альт. кількість на 1 компл.']) || 0,
-    stockMain: Number(r['Запас основний']) || 0,
-    stockActual: Number(r['Фактичний залишок складу — осн.']) || 0,
-    stockAlt: Number(r['Запас альтернативний']) || 0,
-    stockAltActual: Number(r['Факт. залишок складу — альт.']) || 0,
-    note: r['Примітка'] || '',
+    name:           g('Назва матеріалу',              'назва'),
+    unit:           g('Одиниця виміру',               'одиниця') || 'шт',
+    qtyPerKit:      n('Кількість на 1 комплект',      'кількість_на_комплект'),
+    altName:        g('Альтернативна позиція',         'альт_назва'),
+    altQtyPerKit:   n('Альт. кількість на 1 компл.',  'альт_кількість'),
+    stockMain:      n('Запас основний',               'запас_осн'),
+    stockActual:    n('Фактичний залишок складу — осн.', 'фактичний_осн'),
+    stockAlt:       n('Запас альтернативний',         'запас_альт'),
+    stockAltActual: n('Факт. залишок складу — альт.', 'фактичний_альт'),
+    note:           g('Примітка',                     'примітка'),
   };
 }
 
@@ -365,7 +367,7 @@ export async function getMaterials(): Promise<Material[]> {
   await sheetEnsure('Матеріали', MATERIAL_HEADERS);
   const rows = await sheetGet('Матеріали!A:L');
   return rowsToObjects(rows)
-    .filter(r => r.id && r['Активний'] !== 'false')
+    .filter(r => r.id && r['Активний'] !== 'false' && r['активний'] !== 'false')
     .map(parseMaterial);
 }
 
