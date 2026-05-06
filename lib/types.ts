@@ -92,5 +92,6 @@ export interface Material {
   qtyPerKit: number;
   stockMain: number;
   stockActual: number;
+  stockActualDate: string; // YYYY-MM-DD, '' = ніколи не підраховувався
   note: string;
 }
