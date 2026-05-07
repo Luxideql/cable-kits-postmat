@@ -9,22 +9,24 @@ interface MatCalc extends Material {
   remainMain: number;
   kitsLeft: number;
   deficit: number;
+  deficitUnits: number; // deficit × qtyPerKit — скільки одиниць матеріалу не вистачає
   isBottleneck: boolean;
   status: 'ok' | 'low' | 'critical' | 'deficit';
 }
 
 function calcMat(m: Material, kitsProduced: number, planKits: number): MatCalc {
-  const used      = m.qtyPerKit > 0 ? Math.min(m.stockMain, kitsProduced * m.qtyPerKit) : 0;
+  const used       = m.qtyPerKit > 0 ? Math.min(m.stockMain, kitsProduced * m.qtyPerKit) : 0;
   const remainMain = Math.max(0, m.stockMain - used);
   const kitsLeft   = m.qtyPerKit > 0 ? Math.floor(remainMain / m.qtyPerKit) : 0;
   const deficit    = planKits > 0 ? Math.max(0, planKits - kitsProduced - kitsLeft) : 0;
+  const deficitUnits = deficit * m.qtyPerKit;
 
   let status: MatCalc['status'] = 'ok';
-  if (deficit > 0)          status = 'deficit';
-  else if (kitsLeft < 10)   status = 'critical';
-  else if (kitsLeft < 50)   status = 'low';
+  if (deficit > 0)        status = 'deficit';
+  else if (kitsLeft < 10) status = 'critical';
+  else if (kitsLeft < 50) status = 'low';
 
-  return { ...m, remainMain, kitsLeft, deficit, isBottleneck: false, status };
+  return { ...m, remainMain, kitsLeft, deficit, deficitUnits, isBottleneck: false, status };
 }
 
 // ── Form default ──────────────────────────────────────────────────────────────
@@ -226,7 +228,8 @@ export default function MaterialsClient({
                     Інв. підрахунок<br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
                   </th>
                   <th className="th text-center min-w-[80px]">Компл.</th>
-                  <th className="th text-center min-w-[80px]">Дефіцит</th>
+                  <th className="th text-center min-w-[80px]">Дефіцит<br/><span className="text-[9px] normal-case tracking-normal font-normal">компл.</span></th>
+                  <th className="th text-center min-w-[90px]">Треба докупити<br/><span className="text-[9px] normal-case tracking-normal font-normal">од. матеріалу</span></th>
                   <th className="th text-center min-w-[64px]">Дії</th>
                 </tr>
               </thead>
@@ -282,7 +285,7 @@ export default function MaterialsClient({
                         </span>
                       </td>
 
-                      {/* Дефіцит */}
+                      {/* Дефіцит компл. */}
                       <td className="px-3 py-3 text-center">
                         {c.deficit > 0 ? (
                           <span className="inline-flex items-center justify-center px-2 h-7 rounded-lg
@@ -290,6 +293,24 @@ export default function MaterialsClient({
                             text-red-700 dark:text-red-300 bg-red-500/10">
                             −{c.deficit}
                           </span>
+                        ) : planKits > 0 ? (
+                          <span className="text-emerald-500 text-[13px]">✓</span>
+                        ) : (
+                          <span className="text-[12px] text-c4">—</span>
+                        )}
+                      </td>
+
+                      {/* Треба докупити (одиниці матеріалу) */}
+                      <td className="px-3 py-3 text-center">
+                        {c.deficitUnits > 0 ? (
+                          <div>
+                            <span className="inline-flex items-center justify-center px-2 h-7 rounded-lg
+                              text-[13px] font-semibold tabular-nums
+                              text-orange-700 dark:text-orange-300 bg-orange-500/10">
+                              {c.deficitUnits}
+                            </span>
+                            <p className="text-[10px] text-c4 mt-0.5">{c.unit}</p>
+                          </div>
                         ) : planKits > 0 ? (
                           <span className="text-emerald-500 text-[13px]">✓</span>
                         ) : (
