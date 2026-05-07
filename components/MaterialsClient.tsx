@@ -228,8 +228,7 @@ export default function MaterialsClient({
                     Інв. підрахунок<br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
                   </th>
                   <th className="th text-center min-w-[80px]">Компл.</th>
-                  <th className="th text-center min-w-[80px]">Дефіцит<br/><span className="text-[9px] normal-case tracking-normal font-normal">компл.</span></th>
-                  <th className="th text-center min-w-[90px]">Треба докупити<br/><span className="text-[9px] normal-case tracking-normal font-normal">од. матеріалу</span></th>
+                  <th className="th text-center min-w-[130px]">Дефіцит</th>
                   <th className="th text-center min-w-[64px]">Дії</th>
                 </tr>
               </thead>
@@ -285,31 +284,20 @@ export default function MaterialsClient({
                         </span>
                       </td>
 
-                      {/* Дефіцит компл. */}
+                      {/* Дефіцит */}
                       <td className="px-3 py-3 text-center">
                         {c.deficit > 0 ? (
-                          <span className="inline-flex items-center justify-center px-2 h-7 rounded-lg
-                            text-[13px] font-semibold tabular-nums
-                            text-red-700 dark:text-red-300 bg-red-500/10">
-                            −{c.deficit}
-                          </span>
-                        ) : planKits > 0 ? (
-                          <span className="text-emerald-500 text-[13px]">✓</span>
-                        ) : (
-                          <span className="text-[12px] text-c4">—</span>
-                        )}
-                      </td>
-
-                      {/* Треба докупити (одиниці матеріалу) */}
-                      <td className="px-3 py-3 text-center">
-                        {c.deficitUnits > 0 ? (
-                          <div>
-                            <span className="inline-flex items-center justify-center px-2 h-7 rounded-lg
+                          <div className="flex items-center justify-center gap-1.5 flex-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2 h-7 rounded-lg
+                              text-[13px] font-semibold tabular-nums
+                              text-red-700 dark:text-red-300 bg-red-500/10">
+                              −{c.deficit} <span className="text-[10px] font-normal">компл.</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 h-7 rounded-lg
                               text-[13px] font-semibold tabular-nums
                               text-orange-700 dark:text-orange-300 bg-orange-500/10">
-                              {c.deficitUnits}
+                              {c.deficitUnits} <span className="text-[10px] font-normal">{c.unit}</span>
                             </span>
-                            <p className="text-[10px] text-c4 mt-0.5">{c.unit}</p>
                           </div>
                         ) : planKits > 0 ? (
                           <span className="text-emerald-500 text-[13px]">✓</span>
