@@ -6,12 +6,14 @@ export const dynamic = 'force-dynamic';
 export default async function MaterialsPage() {
   let materials: Awaited<ReturnType<typeof getMaterials>> = [];
   let kitsProduced = 0;
+  let shipped = 0;
   let error = '';
 
   try {
     const [mats, kitStats] = await Promise.all([getMaterials(), getKitStats()]);
     materials = mats;
     kitsProduced = kitStats.totalKits;
+    shipped = kitStats.shipped;
   } catch (e: unknown) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -23,5 +25,5 @@ export default async function MaterialsPage() {
     </div>
   );
 
-  return <MaterialsClient initialMaterials={materials} kitsProduced={kitsProduced} />;
+  return <MaterialsClient initialMaterials={materials} kitsProduced={kitsProduced} shipped={shipped} />;
 }

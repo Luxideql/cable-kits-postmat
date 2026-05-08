@@ -87,14 +87,19 @@ const EMPTY: Omit<Material, 'id'> = {
 export default function MaterialsClient({
   initialMaterials,
   kitsProduced,
+  shipped,
 }: {
   initialMaterials: Material[];
   kitsProduced: number;
+  shipped: number;
 }) {
   const [mats, setMats]         = useState<Material[]>(initialMaterials);
   const [tab, setTab]           = useState<'data' | 'inventory'>('data');
   const [planKits, setPlanKits] = useState(() =>
     typeof window !== 'undefined' ? Number(localStorage.getItem('mat_plan_v1') || '0') : 0
+  );
+  const [calcBase, setCalcBase] = useState<'produced' | 'shipped'>(() =>
+    typeof window !== 'undefined' ? (localStorage.getItem('mat_base_v1') as 'produced' | 'shipped' || 'produced') : 'produced'
   );
   const [saving, setSaving]     = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -104,7 +109,8 @@ export default function MaterialsClient({
 
   // ── Calculations ──────────────────────────────────────────────────────────
 
-  const calced = buildCalced(mats, kitsProduced, planKits);
+  const baseKits = calcBase === 'shipped' ? shipped : kitsProduced;
+  const calced = buildCalced(mats, baseKits, planKits);
   const primary = calced.filter(c => !c.isSecondary);
   if (primary.length > 0) {
     const minKits = Math.min(...primary.map(c => c.kitsLeft));
@@ -230,7 +236,7 @@ export default function MaterialsClient({
 
       {/* Plan row */}
       <div className="card p-4 flex flex-wrap items-center gap-4">
-        <p className="text-[13px] font-medium text-c2 shrink-0">Планова кількість комплектів:</p>
+        <p className="text-[13px] font-medium text-c2 shrink-0">Планова кількість:</p>
         <input
           type="number" min={0} value={planKits || ''} onChange={e => handlePlan(e.target.value)}
           placeholder="0"
@@ -238,9 +244,28 @@ export default function MaterialsClient({
                      border border-[var(--cbrd)] bg-[var(--csr)] outline-none
                      focus:border-indigo-400 transition-colors"
         />
+
+        {/* Перемикач бази розрахунку */}
+        <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ backgroundColor: 'var(--csr2)', border: '1px solid var(--cbrd)' }}>
+          {([
+            { id: 'produced', label: 'Від готових', value: kitsProduced },
+            { id: 'shipped',  label: 'Від відправлених', value: shipped },
+          ] as const).map(opt => (
+            <button key={opt.id}
+              onClick={() => { setCalcBase(opt.id); localStorage.setItem('mat_base_v1', opt.id); }}
+              className={`px-3 py-1 rounded-md text-[12px] font-medium transition-all ${
+                calcBase === opt.id
+                  ? 'bg-indigo-500 text-white'
+                  : 'text-c3 hover:bg-[var(--chov)]'
+              }`}>
+              {opt.label} <span className={`tabular-nums ${calcBase === opt.id ? 'text-indigo-200' : 'text-c4'}`}>({opt.value})</span>
+            </button>
+          ))}
+        </div>
+
         {planKits > 0 && (
           <p className="text-[12px] text-c4">
-            Залишилось: <span className="font-semibold text-c2">{Math.max(0, planKits - kitsProduced)}</span> компл.
+            Залишилось: <span className="font-semibold text-c2">{Math.max(0, planKits - baseKits)}</span> компл.
             {deficitCount > 0 && (
               <span className="ml-2 text-red-500 font-semibold">· {deficitCount} матеріалів у дефіциті</span>
             )}
@@ -259,7 +284,7 @@ export default function MaterialsClient({
           <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
             <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Розрахунок по матеріалах</p>
             <p className="text-[11px] text-c4 mt-0.5">
-              Автосписання від {kitsProduced} вироблених компл. · натисніть на цифру для редагування
+              Автосписання від <span className="font-semibold text-c2">{baseKits}</span> {calcBase === 'shipped' ? 'відправлених' : 'готових'} компл. · натисніть на цифру для редагування
             </p>
           </div>
           <div className="overflow-x-auto">
