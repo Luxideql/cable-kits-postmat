@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import type { Material } from '@/lib/types';
+import InfoTooltip from '@/components/InfoTooltip';
 
 // ── Calculation ────────────────────────────────────────────────────────────────
 
@@ -195,9 +196,35 @@ export default function MaterialsClient({
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-c4 mb-1">Облік</p>
           <h1 className="text-[22px] font-semibold text-c1 leading-none tracking-tight">Розхідні матеріали</h1>
         </div>
-        <button onClick={openAdd} className="btn-primary">
-          + Додати
-        </button>
+        <div className="flex items-center gap-2">
+          <InfoTooltip>
+            <p className="font-semibold text-c1 text-[13px] mb-1">Як це працює</p>
+
+            <p className="font-semibold text-c2 mt-2">Закуплено</p>
+            <p>Скільки матеріалу є на складі (вводиш вручну). Натисни на цифру щоб змінити.</p>
+
+            <p className="font-semibold text-c2 mt-2">Залишок</p>
+            <p>Розраховується автоматично: <span className="font-mono text-[11px]">Закуплено − (вироблено × норма/компл.)</span>. Показує скільки матеріалу залишилось після списання.</p>
+
+            <p className="font-semibold text-c2 mt-2">Компл.</p>
+            <p>Скільки ще комплектів можна зібрати із залишку. Якщо є черга позицій — рахується сумарно по всьому ланцюжку.</p>
+
+            <p className="font-semibold text-c2 mt-2">Дефіцит</p>
+            <p><span className="font-mono text-[11px]">план − база − залишок компл.</span> — скільки комплектів не вистачає матеріалу для виконання плану.</p>
+
+            <p className="font-semibold text-c2 mt-2">База розрахунку</p>
+            <p><b>Від готових</b> — списання від усіх зібраних комплектів.<br/><b>Від відправлених</b> — тільки від відправлених (зібрані але не відправлені ще потребують матеріалу).</p>
+
+            <p className="font-semibold text-c2 mt-2">Черга позицій (↓ далі: …)</p>
+            <p>Перша позиція вичерпується повністю. Після цього автоматично починає витрачатись наступна. Вказується у формі редагування.</p>
+
+            <p className="font-semibold text-c2 mt-2">Вкладка «Інвентаризація»</p>
+            <p>Вводиш фактичний підрахунок складу. Система порівнює з розрахунковим залишком і показує відхилення (надлишок / нестача). Дата підрахунку зберігається автоматично.</p>
+          </InfoTooltip>
+          <button onClick={openAdd} className="btn-primary">
+            + Додати
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
