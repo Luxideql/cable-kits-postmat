@@ -344,6 +344,7 @@ const MATERIAL_HEADERS = [
   'Примітка',
   'Активний',
   'Дата підрахунку',
+  'Наступна позиція (ID)',
 ];
 
 function parseMaterial(r: Record<string, string>): Material {
@@ -357,13 +358,14 @@ function parseMaterial(r: Record<string, string>): Material {
     stockMain:        n('Закуплено', 'Запас основний', 'запас_осн'),
     stockActual:      n('Фактичний залишок складу — осн.', 'Фактичний залишок складу', 'фактичний_осн'),
     stockActualDate:  g('Дата підрахунку', 'дата_підрахунку'),
+    nextMaterialId:   g('Наступна позиція (ID)', 'наступна_позиція_id'),
     note:             g('Примітка', 'примітка'),
   };
 }
 
 export async function getMaterials(): Promise<Material[]> {
   await sheetEnsure('Матеріали', MATERIAL_HEADERS);
-  const rows = await sheetGet('Матеріали!A:M');
+  const rows = await sheetGet('Матеріали!A:N');
   return rowsToObjects(rows)
     .filter(r => r.id && r['Активний'] !== 'false' && r['активний'] !== 'false')
     .map(parseMaterial);
@@ -372,35 +374,37 @@ export async function getMaterials(): Promise<Material[]> {
 export async function addMaterial(m: Omit<Material, 'id'>): Promise<{ id: string }> {
   await sheetEnsure('Матеріали', MATERIAL_HEADERS);
   const id = genId('mat');
-  await sheetAppend('Матеріали!A:M', [
+  await sheetAppend('Матеріали!A:N', [
     id, m.name, m.unit, String(m.qtyPerKit),
     '', '0',
     String(m.stockMain || 0), String(m.stockActual || 0),
     '0', '0',
     m.note || '', 'true',
     m.stockActualDate || '',
+    m.nextMaterialId || '',
   ]);
   return { id };
 }
 
 export async function updateMaterial(id: string, updates: Partial<Omit<Material, 'id'>>): Promise<void> {
-  const rows = await sheetGet('Матеріали!A:M');
+  const rows = await sheetGet('Матеріали!A:N');
   const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
   if (idx < 1) return;
   const cur = parseMaterial(rowsToObjects(rows).find(r => r.id === id) ?? {});
   const u = { ...cur, ...updates };
-  await sheetUpdate(`Матеріали!A${idx + 1}:M${idx + 1}`, [[
+  await sheetUpdate(`Матеріали!A${idx + 1}:N${idx + 1}`, [[
     u.id, u.name, u.unit, String(u.qtyPerKit),
     '', '0',
     String(u.stockMain || 0), String(u.stockActual || 0),
     '0', '0',
     u.note || '', 'true',
     u.stockActualDate || '',
+    u.nextMaterialId || '',
   ]]);
 }
 
 export async function deleteMaterial(id: string): Promise<void> {
-  const rows = await sheetGet('Матеріали!A:M');
+  const rows = await sheetGet('Матеріали!A:N');
   const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
   if (idx < 1) return;
   const activeColIdx = (rows[0] ?? []).indexOf('Активний');

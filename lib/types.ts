@@ -93,5 +93,6 @@ export interface Material {
   stockMain: number;
   stockActual: number;
   stockActualDate: string; // YYYY-MM-DD, '' = ніколи не підраховувався
+  nextMaterialId: string;  // ID наступного матеріалу в черзі, '' = немає
   note: string;
 }

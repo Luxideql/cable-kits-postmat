@@ -6,27 +6,71 @@ import type { Material } from '@/lib/types';
 // ── Calculation ────────────────────────────────────────────────────────────────
 
 interface MatCalc extends Material {
-  remainMain: number;
-  kitsLeft: number;
+  remainMain: number;  // залишок після списання (для цієї позиції)
+  kitsLeft: number;    // для первинних — повний ланцюжок; для вторинних — залишок після поглинання
   deficit: number;
-  deficitUnits: number; // deficit × qtyPerKit — скільки одиниць матеріалу не вистачає
+  deficitUnits: number;
   isBottleneck: boolean;
+  isSecondary: boolean; // вторинна — поглинає переповнення від попередника
+  predecessorName: string;
   status: 'ok' | 'low' | 'critical' | 'deficit';
 }
 
-function calcMat(m: Material, kitsProduced: number, planKits: number): MatCalc {
-  const used       = m.qtyPerKit > 0 ? Math.min(m.stockMain, kitsProduced * m.qtyPerKit) : 0;
-  const remainMain = Math.max(0, m.stockMain - used);
-  const kitsLeft   = m.qtyPerKit > 0 ? Math.floor(remainMain / m.qtyPerKit) : 0;
-  const deficit    = planKits > 0 ? Math.max(0, planKits - kitsProduced - kitsLeft) : 0;
-  const deficitUnits = deficit * m.qtyPerKit;
+// Рекурсивний обхід ланцюжка: скільки комплектів залишається починаючи від m,
+// якщо producedForThisLevel комплектів вже "спожито" на цьому рівні.
+function chainKitsLeft(
+  mats: Material[],
+  m: Material,
+  producedForThisLevel: number,
+  visited = new Set<string>(),
+): { kitsLeft: number; remainMain: number } {
+  if (visited.has(m.id) || !m.qtyPerKit) return { kitsLeft: 0, remainMain: m.stockMain };
+  visited.add(m.id);
 
-  let status: MatCalc['status'] = 'ok';
-  if (deficit > 0)        status = 'deficit';
-  else if (kitsLeft < 10) status = 'critical';
-  else if (kitsLeft < 50) status = 'low';
+  const capacity  = Math.floor(m.stockMain / m.qtyPerKit);
+  const usedUnits = Math.min(m.stockMain, producedForThisLevel * m.qtyPerKit);
+  const remainMain = Math.max(0, m.stockMain - usedUnits);
+  const kitsLeftSelf = Math.floor(remainMain / m.qtyPerKit);
+  const overflow  = Math.max(0, producedForThisLevel - capacity);
 
-  return { ...m, remainMain, kitsLeft, deficit, deficitUnits, isBottleneck: false, status };
+  if (m.nextMaterialId) {
+    const next = mats.find(n => n.id === m.nextMaterialId);
+    if (next) {
+      const { kitsLeft: kitsFromNext } = chainKitsLeft(mats, next, overflow, new Set(visited));
+      return { kitsLeft: kitsLeftSelf + kitsFromNext, remainMain };
+    }
+  }
+  return { kitsLeft: kitsLeftSelf, remainMain };
+}
+
+function buildCalced(mats: Material[], kitsProduced: number, planKits: number): MatCalc[] {
+  const secondaryIds = new Set(mats.map(m => m.nextMaterialId).filter(Boolean));
+
+  return mats.map(m => {
+    const isSecondary = secondaryIds.has(m.id);
+    const predecessor = isSecondary ? mats.find(p => p.nextMaterialId === m.id) : undefined;
+    const predecessorName = predecessor?.name ?? '';
+
+    if (isSecondary && predecessor) {
+      // Скільки комплектів "переповнення" прийшло від попередника
+      const predCapacity = predecessor.qtyPerKit > 0
+        ? Math.floor(predecessor.stockMain / predecessor.qtyPerKit) : 0;
+      const overflowKits = Math.max(0, kitsProduced - predCapacity);
+      const { kitsLeft, remainMain } = chainKitsLeft(mats, m, overflowKits);
+      return { ...m, remainMain, kitsLeft, deficit: 0, deficitUnits: 0, isBottleneck: false, isSecondary: true, predecessorName, status: 'ok' as const };
+    }
+
+    const { kitsLeft, remainMain } = chainKitsLeft(mats, m, kitsProduced);
+    const deficit      = planKits > 0 ? Math.max(0, planKits - kitsProduced - kitsLeft) : 0;
+    const deficitUnits = deficit * m.qtyPerKit;
+
+    let status: MatCalc['status'] = 'ok';
+    if (deficit > 0)        status = 'deficit';
+    else if (kitsLeft < 10) status = 'critical';
+    else if (kitsLeft < 50) status = 'low';
+
+    return { ...m, remainMain, kitsLeft, deficit, deficitUnits, isBottleneck: false, isSecondary: false, predecessorName: '', status };
+  });
 }
 
 // ── Form default ──────────────────────────────────────────────────────────────
@@ -34,6 +78,7 @@ function calcMat(m: Material, kitsProduced: number, planKits: number): MatCalc {
 const EMPTY: Omit<Material, 'id'> = {
   name: '', unit: 'шт', qtyPerKit: 1,
   stockMain: 0, stockActual: 0, stockActualDate: '',
+  nextMaterialId: '',
   note: '',
 };
 
@@ -59,14 +104,15 @@ export default function MaterialsClient({
 
   // ── Calculations ──────────────────────────────────────────────────────────
 
-  const calced = mats.map(m => calcMat(m, kitsProduced, planKits));
-  if (calced.length > 0) {
-    const minKits = Math.min(...calced.map(c => c.kitsLeft));
-    calced.forEach(c => { c.isBottleneck = c.kitsLeft === minKits; });
+  const calced = buildCalced(mats, kitsProduced, planKits);
+  const primary = calced.filter(c => !c.isSecondary);
+  if (primary.length > 0) {
+    const minKits = Math.min(...primary.map(c => c.kitsLeft));
+    primary.forEach(c => { c.isBottleneck = c.kitsLeft === minKits; });
   }
-  const deficitCount = calced.filter(c => c.deficit > 0).length;
-  const bottleneck   = calced.find(c => c.isBottleneck);
-  const minKits      = calced.length > 0 ? Math.min(...calced.map(c => c.kitsLeft)) : 0;
+  const deficitCount = primary.filter(c => c.deficit > 0).length;
+  const bottleneck   = primary.find(c => c.isBottleneck);
+  const minKits      = primary.length > 0 ? Math.min(...primary.map(c => c.kitsLeft)) : 0;
 
   // ── Plan ──────────────────────────────────────────────────────────────────
 
@@ -98,7 +144,7 @@ export default function MaterialsClient({
   const openAdd = () => { setEditMat(null); setForm(EMPTY); setShowForm(true); };
   const openEdit = (m: Material) => {
     setEditMat(m);
-    setForm({ name: m.name, unit: m.unit, qtyPerKit: m.qtyPerKit, stockMain: m.stockMain, stockActual: m.stockActual, stockActualDate: m.stockActualDate, note: m.note });
+    setForm({ name: m.name, unit: m.unit, qtyPerKit: m.qtyPerKit, stockMain: m.stockMain, stockActual: m.stockActual, stockActualDate: m.stockActualDate, nextMaterialId: m.nextMaterialId, note: m.note });
     setShowForm(true);
   };
   const closeForm = () => { setShowForm(false); setEditMat(null); setForm(EMPTY); };
@@ -236,15 +282,29 @@ export default function MaterialsClient({
                 {calced.map((c, i) => {
                   const isLast = i === calced.length - 1;
                   return (
-                    <tr key={c.id} style={!isLast ? { borderBottom: '1px solid var(--cbrd)' } : {}}>
+                    <tr key={c.id}
+                      style={{
+                        ...(c.isSecondary ? { backgroundColor: 'var(--csr2)' } : {}),
+                        ...(!isLast ? { borderBottom: '1px solid var(--cbrd)' } : {}),
+                      }}>
 
                       {/* Матеріал */}
-                      <td className="px-4 py-3 sticky left-0 z-10" style={{ backgroundColor: 'var(--csr)' }}>
+                      <td className="px-4 py-3 sticky left-0 z-10" style={{ backgroundColor: c.isSecondary ? 'var(--csr2)' : 'var(--csr)' }}>
                         <div className="flex items-center gap-2">
-                          {c.isBottleneck && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" title="Вузьке місце" />}
+                          {c.isSecondary
+                            ? <span className="text-[14px] text-indigo-400 shrink-0" title="Поглинає переповнення">↑</span>
+                            : c.isBottleneck
+                              ? <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" title="Вузьке місце" />
+                              : null
+                          }
                           <div>
                             <p className="text-[13px] font-semibold text-c1 leading-tight">{c.name}</p>
-                            <p className="text-[11px] text-c4">{c.unit}</p>
+                            {c.isSecondary
+                              ? <p className="text-[10px] text-indigo-400">↑ після «{c.predecessorName}»</p>
+                              : c.nextMaterialId
+                                ? <p className="text-[10px] text-c4">↓ далі: {mats.find(m => m.id === c.nextMaterialId)?.name ?? '—'}</p>
+                                : <p className="text-[11px] text-c4">{c.unit}</p>
+                            }
                           </div>
                         </div>
                       </td>
@@ -263,7 +323,9 @@ export default function MaterialsClient({
                           {c.remainMain}
                         </span>
                         {c.stockMain - c.remainMain > 0 && (
-                          <p className="text-[10px] text-c4 mt-0.5">−{c.stockMain - c.remainMain} вик.</p>
+                          <p className="text-[10px] text-c4 mt-0.5">
+                            −{c.stockMain - c.remainMain} {c.isSecondary ? 'погл.' : 'вик.'}
+                          </p>
                         )}
                       </td>
 
@@ -286,7 +348,9 @@ export default function MaterialsClient({
 
                       {/* Дефіцит */}
                       <td className="px-3 py-3 text-center">
-                        {c.deficit > 0 ? (
+                        {c.isSecondary ? (
+                          <span className="text-[11px] text-c4">в черзі</span>
+                        ) : c.deficit > 0 ? (
                           <div className="flex items-center justify-center gap-1.5 flex-nowrap">
                             <span className="inline-flex items-center gap-1 px-2 h-7 rounded-lg
                               text-[13px] font-semibold tabular-nums
@@ -450,6 +514,17 @@ export default function MaterialsClient({
                     placeholder="0" />
                 </FormField>
               </div>
+
+              <FormField label="Наступна позиція (якщо ця вичерпається)">
+                <select className={inputCls} value={form.nextMaterialId}
+                  onChange={e => setForm(f => ({ ...f, nextMaterialId: e.target.value }))}>
+                  <option value="">— не вказано —</option>
+                  {mats
+                    .filter(m => m.id !== editMat?.id)
+                    .map(m => <option key={m.id} value={m.id}>{m.name}</option>)
+                  }
+                </select>
+              </FormField>
 
               <FormField label="Примітка">
                 <input className={inputCls} value={form.note}
