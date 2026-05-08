@@ -7,12 +7,13 @@ import InfoTooltip from '@/components/InfoTooltip';
 // ── Calculation ────────────────────────────────────────────────────────────────
 
 interface MatCalc extends Material {
-  remainMain: number;  // залишок після списання (для цієї позиції)
-  kitsLeft: number;    // для первинних — повний ланцюжок; для вторинних — залишок після поглинання
+  remainMain: number;
+  kitsLeft: number;      // для первинних — повний ланцюжок; для вторинних — залишок після поглинання
+  kitsFromSelf: number;  // скільки компл. дає лише ця позиція (без ланцюга)
   deficit: number;
   deficitUnits: number;
   isBottleneck: boolean;
-  isSecondary: boolean; // вторинна — поглинає переповнення від попередника
+  isSecondary: boolean;
   predecessorName: string;
   status: 'ok' | 'low' | 'critical' | 'deficit';
 }
@@ -53,15 +54,16 @@ function buildCalced(mats: Material[], kitsProduced: number, planKits: number): 
     const predecessorName = predecessor?.name ?? '';
 
     if (isSecondary && predecessor) {
-      // Скільки комплектів "переповнення" прийшло від попередника
       const predCapacity = predecessor.qtyPerKit > 0
         ? Math.floor(predecessor.stockMain / predecessor.qtyPerKit) : 0;
       const overflowKits = Math.max(0, kitsProduced - predCapacity);
       const { kitsLeft, remainMain } = chainKitsLeft(mats, m, overflowKits);
-      return { ...m, remainMain, kitsLeft, deficit: 0, deficitUnits: 0, isBottleneck: false, isSecondary: true, predecessorName, status: 'ok' as const };
+      const kitsFromSelf = m.qtyPerKit > 0 ? Math.floor(remainMain / m.qtyPerKit) : 0;
+      return { ...m, remainMain, kitsLeft, kitsFromSelf, deficit: 0, deficitUnits: 0, isBottleneck: false, isSecondary: true, predecessorName, status: 'ok' as const };
     }
 
     const { kitsLeft, remainMain } = chainKitsLeft(mats, m, kitsProduced);
+    const kitsFromSelf = m.qtyPerKit > 0 ? Math.floor(remainMain / m.qtyPerKit) : 0;
     const deficit      = planKits > 0 ? Math.max(0, planKits - kitsProduced - kitsLeft) : 0;
     const deficitUnits = deficit * m.qtyPerKit;
 
@@ -70,8 +72,28 @@ function buildCalced(mats: Material[], kitsProduced: number, planKits: number): 
     else if (kitsLeft < 10) status = 'critical';
     else if (kitsLeft < 50) status = 'low';
 
-    return { ...m, remainMain, kitsLeft, deficit, deficitUnits, isBottleneck: false, isSecondary: false, predecessorName: '', status };
+    return { ...m, remainMain, kitsLeft, kitsFromSelf, deficit, deficitUnits, isBottleneck: false, isSecondary: false, predecessorName: '', status };
   });
+}
+
+// Впорядковує список так, щоб вторинні позиції йшли одразу після своєї первинної
+function sortByChain(calced: MatCalc[]): MatCalc[] {
+  const placed = new Set<string>();
+  const result: MatCalc[] = [];
+  for (const c of calced) {
+    if (placed.has(c.id)) continue;
+    placed.add(c.id);
+    result.push(c);
+    let cur = c;
+    while (cur.nextMaterialId) {
+      const next = calced.find(n => n.id === cur.nextMaterialId);
+      if (!next || placed.has(next.id)) break;
+      placed.add(next.id);
+      result.push(next);
+      cur = next;
+    }
+  }
+  return result;
 }
 
 // ── Form default ──────────────────────────────────────────────────────────────
@@ -112,6 +134,7 @@ export default function MaterialsClient({
 
   const baseKits = calcBase === 'shipped' ? shipped : kitsProduced;
   const calced = buildCalced(mats, baseKits, planKits);
+  const sortedCalced = sortByChain(calced);
   const primary = calced.filter(c => !c.isSecondary);
   if (primary.length > 0) {
     const minKits = Math.min(...primary.map(c => c.kitsLeft));
@@ -327,8 +350,8 @@ export default function MaterialsClient({
                 </tr>
               </thead>
               <tbody>
-                {calced.map((c, i) => {
-                  const isLast = i === calced.length - 1;
+                {sortedCalced.map((c, i) => {
+                  const isLast = i === sortedCalced.length - 1;
                   return (
                     <tr key={c.id}
                       style={{
@@ -392,6 +415,11 @@ export default function MaterialsClient({
                             : 'text-red-600 dark:text-red-400 bg-red-500/10'}`}>
                           {c.kitsLeft}
                         </span>
+                        {!c.isSecondary && c.nextMaterialId && c.kitsLeft !== c.kitsFromSelf && (
+                          <p className="text-[10px] text-c4 mt-0.5 tabular-nums">
+                            {c.kitsFromSelf}+{c.kitsLeft - c.kitsFromSelf}
+                          </p>
+                        )}
                       </td>
 
                       {/* Дефіцит */}
@@ -473,8 +501,8 @@ export default function MaterialsClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {calced.map((c, i) => {
-                    const isLast = i === calced.length - 1;
+                  {sortedCalced.map((c, i) => {
+                    const isLast = i === sortedCalced.length - 1;
                     const diff   = c.stockActual > 0 ? c.stockActual - c.remainMain : null;
                     const diffColor = (d: number | null) =>
                       d === null ? 'text-c4' : d > 0 ? 'text-emerald-600 dark:text-emerald-400' : d < 0 ? 'text-red-500' : 'text-c2';
