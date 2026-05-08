@@ -357,7 +357,6 @@ function parseMaterial(r: Record<string, string>): Material {
     qtyPerKit:   n('Кількість на 1 комплект', 'кількість_на_комплект'),
     stockMain:        n('Закуплено', 'Запас основний', 'запас_осн'),
     stockActual:      n('Фактичний залишок складу — осн.', 'Фактичний залишок складу', 'фактичний_осн'),
-    stockActualDate:  g('Дата підрахунку', 'дата_підрахунку'),
     nextMaterialId:   g('Наступна позиція (ID)', 'наступна_позиція_id'),
     note:             g('Примітка', 'примітка'),
   };
@@ -390,7 +389,7 @@ export async function addMaterial(m: Omit<Material, 'id'>): Promise<{ id: string
     String(m.stockMain || 0), String(m.stockActual || 0),
     '0', '0',
     m.note || '', 'true',
-    m.stockActualDate || '',
+    '',
     m.nextMaterialId || '',
   ]);
   return { id };
@@ -414,7 +413,7 @@ export async function updateMaterial(id: string, updates: Partial<Omit<Material,
     String(u.stockMain || 0), String(u.stockActual || 0),
     '0', '0',
     u.note || '', 'true',
-    u.stockActualDate || '',
+    '',
     u.nextMaterialId || '',
   ]]);
 }

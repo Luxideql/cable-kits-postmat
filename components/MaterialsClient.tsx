@@ -78,7 +78,7 @@ function buildCalced(mats: Material[], kitsProduced: number, planKits: number): 
 
 const EMPTY: Omit<Material, 'id'> = {
   name: '', unit: 'шт', qtyPerKit: 1,
-  stockMain: 0, stockActual: 0, stockActualDate: '',
+  stockMain: 0, stockActual: 0,
   nextMaterialId: '',
   note: '',
 };
@@ -133,15 +133,11 @@ export default function MaterialsClient({
 
   const patchStock = async (id: string, field: keyof Material, value: number) => {
     setSaving(id + field);
-    const today = new Date().toISOString().slice(0, 10);
-    const extra = field === 'stockActual'
-      ? { stockActualDate: value > 0 ? today : '' }
-      : {};
-    setMats(prev => prev.map(m => m.id === id ? { ...m, [field]: value, ...extra } : m));
+    setMats(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
     await fetch(`/api/materials/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value, ...extra }),
+      body: JSON.stringify({ [field]: value }),
     });
     setSaving(null);
   };
@@ -151,7 +147,7 @@ export default function MaterialsClient({
   const openAdd = () => { setEditMat(null); setForm(EMPTY); setShowForm(true); };
   const openEdit = (m: Material) => {
     setEditMat(m);
-    setForm({ name: m.name, unit: m.unit, qtyPerKit: m.qtyPerKit, stockMain: m.stockMain, stockActual: m.stockActual, stockActualDate: m.stockActualDate, nextMaterialId: m.nextMaterialId, note: m.note });
+    setForm({ name: m.name, unit: m.unit, qtyPerKit: m.qtyPerKit, stockMain: m.stockMain, stockActual: m.stockActual, nextMaterialId: m.nextMaterialId, note: m.note });
     setShowForm(true);
   };
   const closeForm = () => { setShowForm(false); setEditMat(null); setForm(EMPTY); };
@@ -384,7 +380,7 @@ export default function MaterialsClient({
                       {/* Інвентаризація */}
                       <InvCell
                         id={c.id} field="stockActual" value={c.stockActual}
-                        date={c.stockActualDate} calcRemain={c.remainMain} saving={saving} onSave={patchStock}
+                        calcRemain={c.remainMain} saving={saving} onSave={patchStock}
                       />
 
                       {/* Компл. */}
@@ -497,7 +493,7 @@ export default function MaterialsClient({
                           <p className="text-[10px] text-c4 mt-0.5">{c.unit}</p>
                         </td>
                         {/* Факт. підрахунок */}
-                        <InvCell id={c.id} field="stockActual" value={c.stockActual} date={c.stockActualDate} calcRemain={c.remainMain} saving={saving} onSave={patchStock} />
+                        <InvCell id={c.id} field="stockActual" value={c.stockActual} calcRemain={c.remainMain} saving={saving} onSave={patchStock} />
                         {/* Відхилення */}
                         <td className="px-3 py-3 text-center">
                           {diff !== null ? (
@@ -506,7 +502,6 @@ export default function MaterialsClient({
                                 {diff > 0 ? `+${diff}` : diff}
                               </span>
                               <p className="text-[10px] text-c4 mt-0.5">{diff > 0 ? 'надлишок' : diff < 0 ? 'нестача' : 'збіг'}</p>
-                              {c.stockActualDate && <p className="text-[9px] text-c4 mt-0.5">{fmtDate(c.stockActualDate)}</p>}
                             </div>
                           ) : (
                             <span className="text-[12px] text-c4">не підраховано</span>
@@ -619,17 +614,10 @@ function FormField({ label, required, children }: { label: string; required?: bo
 
 // ── Inventory cell — editable count + discrepancy vs calculated remain ────────
 
-function fmtDate(iso: string): string {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-');
-  return `${d}.${m}.${y}`;
-}
-
-function InvCell({ id, field, value, date, calcRemain, saving, onSave }: {
+function InvCell({ id, field, value, calcRemain, saving, onSave }: {
   id: string;
   field: keyof Material;
   value: number;
-  date?: string;
   calcRemain: number;
   saving: string | null;
   onSave: (id: string, field: keyof Material, value: number) => void;
@@ -680,7 +668,6 @@ function InvCell({ id, field, value, date, calcRemain, saving, onSave }: {
               {diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : '='}
             </p>
           )}
-          {date && <p className="text-[9px] text-c4 mt-0.5">{fmtDate(date)}</p>}
         </div>
       ) : (
         <span className="text-[11px] text-c4 group-hover:text-amber-400 transition-colors">
