@@ -62,7 +62,21 @@ export async function sheetEnsure(sheetName: string, headers: string[]): Promise
     valueRenderOption: 'FORMATTED_VALUE',
   });
   const row1 = ((firstRow.data.values ?? [[]])[0] ?? []) as string[];
-  if (row1[0] === 'id') return; // headers already correct
+
+  if (row1[0] === 'id') {
+    // Headers present — append any missing columns
+    const missing = headers.filter(h => !row1.includes(h));
+    if (missing.length > 0) {
+      const nextCol = String.fromCharCode(65 + row1.length);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!${nextCol}1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [missing] },
+      });
+    }
+    return;
+  }
 
   // Row 1 is not 'id' — insert a new row 1 with correct headers
   const sheetId = sheet.properties?.sheetId ?? 0;
