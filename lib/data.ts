@@ -366,9 +366,19 @@ function parseMaterial(r: Record<string, string>): Material {
 export async function getMaterials(): Promise<Material[]> {
   await sheetEnsure('Матеріали', MATERIAL_HEADERS);
   const rows = await sheetGet('Матеріали!A:N');
+  const headers = rows[0] ?? [];
+  const hasNextMatHeader = headers.includes('Наступна позиція (ID)');
+
   return rowsToObjects(rows)
     .filter(r => r.id && r['Активний'] !== 'false' && r['активний'] !== 'false')
-    .map(parseMaterial);
+    .map(r => {
+      // Fallback: if the header didn't exist yet, read column N (index 13) by position
+      if (!hasNextMatHeader) {
+        const rawRow = rows.find((row, i) => i > 0 && row[0] === r.id);
+        if (rawRow?.[13]) r = { ...r, 'Наступна позиція (ID)': rawRow[13] };
+      }
+      return parseMaterial(r);
+    });
 }
 
 export async function addMaterial(m: Omit<Material, 'id'>): Promise<{ id: string }> {
@@ -390,7 +400,13 @@ export async function updateMaterial(id: string, updates: Partial<Omit<Material,
   const rows = await sheetGet('Матеріали!A:N');
   const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
   if (idx < 1) return;
-  const cur = parseMaterial(rowsToObjects(rows).find(r => r.id === id) ?? {});
+  const headers = rows[0] ?? [];
+  const hasNextMatHeader = headers.includes('Наступна позиція (ID)');
+  let rObj = rowsToObjects(rows).find(r => r.id === id) ?? {};
+  if (!hasNextMatHeader && rows[idx]?.[13]) {
+    rObj = { ...rObj, 'Наступна позиція (ID)': rows[idx][13] };
+  }
+  const cur = parseMaterial(rObj);
   const u = { ...cur, ...updates };
   await sheetUpdate(`Матеріали!A${idx + 1}:N${idx + 1}`, [[
     u.id, u.name, u.unit, String(u.qtyPerKit),
