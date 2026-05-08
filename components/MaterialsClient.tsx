@@ -338,14 +338,31 @@ export default function MaterialsClient({
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--cbrd)' }}>
                   <th className="th text-left min-w-[180px] sticky left-0 z-10" style={{ backgroundColor: 'var(--csr)' }}>Матеріал</th>
-                  <th className="th text-center min-w-[72px]">На 1 компл.</th>
-                  <th className="th text-center min-w-[88px]">Закуплено</th>
-                  <th className="th text-center min-w-[88px]">Залишок</th>
-                  <th className="th text-center min-w-[96px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>
-                    Інв. підрахунок<br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
+                  <th className="th text-center min-w-[72px]">
+                    На 1 компл.
+                    <ColTip>Норма витрати матеріалу на один зібраний комплект. Задається при додаванні матеріалу.</ColTip>
                   </th>
-                  <th className="th text-center min-w-[80px]">Компл.</th>
-                  <th className="th text-center min-w-[130px]">Дефіцит</th>
+                  <th className="th text-center min-w-[88px]">
+                    Закуплено
+                    <ColTip>Загальний запас матеріалу на складі. Натисніть на цифру щоб змінити.</ColTip>
+                  </th>
+                  <th className="th text-center min-w-[88px]">
+                    Залишок
+                    <ColTip>Закуплено − (база × норма/компл.). Скільки матеріалу залишилось після списання на вже зроблені комплекти.</ColTip>
+                  </th>
+                  <th className="th text-center min-w-[96px]" style={{ borderLeft: '2px solid var(--cbrd)' }}>
+                    Інв. підрахунок
+                    <ColTip>Фактичний підрахунок складу. Натисніть щоб ввести. Відхилення = факт − розрахунок (зелений — надлишок, червоний — нестача).</ColTip>
+                    <br/><span className="text-[9px] normal-case tracking-normal font-normal">факт. підрахунок</span>
+                  </th>
+                  <th className="th text-center min-w-[80px]">
+                    Компл.
+                    <ColTip>Скільки ще комплектів можна зробити із залишку. Якщо є черга позицій — рахується сумарно; цифри нижче показують розбивку (своя + наступна).</ColTip>
+                  </th>
+                  <th className="th text-center min-w-[130px]">
+                    Дефіцит
+                    <ColTip>Скільки комплектів та одиниць матеріалу не вистачає для виконання плану. Відображається лише якщо задана «Планова кількість».</ColTip>
+                  </th>
                   <th className="th text-center min-w-[64px]">Дії</th>
                 </tr>
               </thead>
@@ -620,6 +637,22 @@ export default function MaterialsClient({
         </div>
       )}
     </div>
+  );
+}
+
+// ── Column tooltip ─────────────────────────────────────────────────────────────
+
+function ColTip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="relative group inline-flex ml-1 cursor-help align-middle">
+      <span className="text-[9px] text-c4/60 border border-c4/30 rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none select-none">?</span>
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 px-3 py-2.5 rounded-xl
+                       text-[11px] text-c2 leading-relaxed text-left font-normal normal-case tracking-normal whitespace-normal
+                       bg-[var(--csr)] border border-[var(--cbrd)] shadow-xl
+                       opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50">
+        {children}
+      </span>
+    </span>
   );
 }
 
