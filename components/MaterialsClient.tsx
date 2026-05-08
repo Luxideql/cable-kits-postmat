@@ -640,19 +640,43 @@ export default function MaterialsClient({
   );
 }
 
-// ── Column tooltip ─────────────────────────────────────────────────────────────
+// ── Column tooltip (fixed position to escape overflow containers) ──────────────
 
 function ColTip({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos]   = useState({ top: 0, left: 0 });
+  const ref             = useRef<HTMLSpanElement>(null);
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!open && ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 6, left: r.left + r.width / 2 });
+    }
+    setOpen(v => !v);
+  };
+
   return (
-    <span className="relative group inline-flex ml-1 cursor-help align-middle">
-      <span className="text-[9px] text-c4/60 border border-c4/30 rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none select-none">?</span>
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 px-3 py-2.5 rounded-xl
-                       text-[11px] text-c2 leading-relaxed text-left font-normal normal-case tracking-normal whitespace-normal
-                       bg-[var(--csr)] border border-[var(--cbrd)] shadow-xl
-                       opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50">
-        {children}
+    <>
+      <span ref={ref} onClick={toggle}
+        className="inline-flex ml-1 cursor-pointer align-middle">
+        <span className="text-[9px] text-c4/60 border border-c4/30 rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none select-none">?</span>
       </span>
-    </span>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
+          <div
+            style={{ position: 'fixed', top: pos.top, left: pos.left, transform: 'translateX(-50%)', zIndex: 9999 }}
+            className="w-56 px-3 py-2.5 rounded-xl text-[11px] text-c2 leading-relaxed
+                       font-normal normal-case tracking-normal text-left whitespace-normal
+                       bg-[var(--csr)] border border-[var(--cbrd)] shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {children}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
