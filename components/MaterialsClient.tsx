@@ -122,7 +122,7 @@ export default function MaterialsClient({
     typeof window !== 'undefined' ? Number(localStorage.getItem('mat_plan_v1') || '0') : 0
   );
   const [calcBase, setCalcBase] = useState<'produced' | 'shipped'>(() =>
-    typeof window !== 'undefined' ? (localStorage.getItem('mat_base_v1') as 'produced' | 'shipped' || 'produced') : 'produced'
+    typeof window !== 'undefined' ? (localStorage.getItem('mat_base_v1') as 'produced' | 'shipped' || 'shipped') : 'shipped'
   );
   const [saving, setSaving]     = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
