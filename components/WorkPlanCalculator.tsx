@@ -6,7 +6,7 @@ import InfoTooltip from './InfoTooltip';
 const LS_KEY = 'workplan_v5';
 
 type PositionRow = { id: string; lengthMm: number; qtyPerPostomat: number; available: number };
-type Props = { positions: PositionRow[] };
+type Props = { positions: PositionRow[]; shipped: number };
 
 type ShiftCardItem = { posId: string; lengthMm: number; qty: number };
 type ShiftCard = {
@@ -216,7 +216,7 @@ function PrintModal({ card, items, label, onClose }: {
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
-export default function WorkPlanCalculator({ positions }: Props) {
+export default function WorkPlanCalculator({ positions, shipped }: Props) {
   const saved = useMemo(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY) ?? 'null'); } catch { return null; }
   }, []);
@@ -275,12 +275,16 @@ export default function WorkPlanCalculator({ positions }: Props) {
   async function doRecount() {
     setRecounting(true);
     const active = localPositions.filter(p => p.qtyPerPostomat > 0);
-    await Promise.all(active.map(p =>
-      fetch('/api/positions/stock', {
+    await Promise.all(active.map(p => {
+      // stock = фізичний залишок + всі відправлені × qty
+      // тоді available = stock - shipped×qty = фізичний залишок
+      const physicalUnits = recountMap[p.id] ?? 0;
+      const stock = physicalUnits + shipped * p.qtyPerPostomat;
+      return fetch('/api/positions/stock', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: p.id, stock: recountMap[p.id] ?? 0, stockDate: cardDate }),
-      })
-    ));
+        body: JSON.stringify({ id: p.id, stock }),
+      });
+    }));
     await refreshPositions();
     setShowRecount(false);
     setRecounting(false);

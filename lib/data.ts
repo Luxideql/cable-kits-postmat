@@ -89,17 +89,11 @@ export async function getPositions(): Promise<Position[]> {
   return rowsToObjects(rows).filter(p => p.активний !== 'false').map(parsePosition);
 }
 
-export async function updatePositionStock(positionId: string, stock: number, stockDate?: string): Promise<void> {
-  const rows = await sheetGet('Позиції!A:K');
+export async function updatePositionStock(positionId: string, stock: number): Promise<void> {
+  const rows = await sheetGet('Позиції!A:G');
   const idx = rows.findIndex((r, i) => i > 0 && r[0] === positionId);
   if (idx < 1) return;
-  if (!rows[0]?.[10]) {
-    await sheetUpdate('Позиції!K1', [['дата_переобліку']]);
-  }
   await sheetUpdate(`Позиції!G${idx + 1}`, [[String(stock)]]);
-  if (stockDate !== undefined) {
-    await sheetUpdate(`Позиції!K${idx + 1}`, [[stockDate]]);
-  }
 }
 
 // ─── Production Plan ─────────────────────────────────────────────────────────

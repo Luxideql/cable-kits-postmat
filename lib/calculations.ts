@@ -6,17 +6,11 @@ export function calcPositionStats(
   plan: ProductionPlan[],
   shipments: Shipment[] = []
 ): PositionStats {
-  const d = pos.stockDate || '';
-
-  // Якщо є дата переобліку — рахуємо тільки звіти та відвантаження ПІСЛЯ неї.
-  // Якщо дати немає — враховуємо всю історію (backward-compatible).
   const produced = reports
-    .filter(r => r.positionId === pos.id && (!d || r.date >= d))
+    .filter(r => r.positionId === pos.id)
     .reduce((s, r) => s + r.qty, 0);
 
-  const shippedKits = shipments
-    .filter(s => !d || s.date >= d)
-    .reduce((s, r) => s + r.qty, 0);
+  const shippedKits = shipments.reduce((s, r) => s + r.qty, 0);
 
   // stock = фактичний залишок на дату переобліку (або початковий ввід)
   const available = Math.max(0, pos.stock - shippedKits * pos.qtyPerPostomat);
