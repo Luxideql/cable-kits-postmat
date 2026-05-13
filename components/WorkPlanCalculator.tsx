@@ -402,13 +402,14 @@ export default function WorkPlanCalculator({ positions }: Props) {
           });
         }));
       }
+      const didRollback = card.stock_applied && card.fact_items.length > 0;
       await fetch(`/api/workcards/${card.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'cancelled', cancelled_at: now }),
+        body: JSON.stringify({ status: 'cancelled', cancelled_at: now, ...(didRollback ? { stock_applied: false } : {}) }),
       });
-      const updated = { ...card, status: 'cancelled' as const, cancelled_at: now };
+      const updated = { ...card, status: 'cancelled' as const, cancelled_at: now, stock_applied: didRollback ? false : card.stock_applied };
       setHistoryCards(prev => prev.map(c => c.id === card.id ? updated : c));
-      if (card.stock_applied) await refreshPositions();
+      if (didRollback) await refreshPositions();
     } finally { setCancelling(false); }
   }
 
@@ -428,6 +429,19 @@ export default function WorkPlanCalculator({ positions }: Props) {
     if (!confirm(`Видалити картку ${fmtDate(card.date)}? Це незворотньо.`)) return;
     setDeletingId(card.id);
     try {
+      if (card.stock_applied && card.fact_items.length > 0) {
+        const posRes = await fetch('/api/positions');
+        const { positions: cur } = await posRes.json();
+        await Promise.all(card.fact_items.filter(it => it.qty > 0).map(it => {
+          const pos = (cur as { id: string; available: number }[]).find(p => p.id === it.posId);
+          if (!pos) return Promise.resolve();
+          return fetch('/api/positions/stock', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: it.posId, stock: Math.max(0, pos.available - it.qty), stockDate: card.date }),
+          });
+        }));
+        await refreshPositions();
+      }
       await fetch(`/api/workcards/${card.id}`, { method: 'DELETE' });
       setHistoryCards(prev => prev.filter(c => c.id !== card.id));
     } finally { setDeletingId(null); }
