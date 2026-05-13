@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from 'react';
 export type DayBar = {
   label: string;
   value: number;
+  kits: number;
   isToday: boolean;
   newMonth: boolean;
   monthLabel: string;
@@ -36,7 +37,7 @@ export default function BarChart({ data }: { data: DayBar[] }) {
   const BAR_W   = Math.min(Math.floor(SLOT * 0.62), 42);
   const H       = 140;
   const MONTH_H = 22;
-  const LABEL_H = 24;
+  const LABEL_H = 36;
   const PX      = 4;
   const W       = SLOT * data.length + PX * 2;
   const totalH  = MONTH_H + H + LABEL_H;
@@ -133,7 +134,7 @@ export default function BarChart({ data }: { data: DayBar[] }) {
 
               {/* Day number label */}
               <text
-                x={x + BAR_W / 2} y={MONTH_H + H + 15}
+                x={x + BAR_W / 2} y={MONTH_H + H + 14}
                 textAnchor="middle" fontSize="10"
                 fontWeight={d.isToday ? '700' : '400'}
                 fill={d.isToday ? '#818cf8' : 'rgba(100,116,139,0.5)'}
@@ -141,9 +142,20 @@ export default function BarChart({ data }: { data: DayBar[] }) {
                 {d.label}
               </text>
 
+              {/* Kits label */}
+              {d.kits > 0 && (
+                <text
+                  x={x + BAR_W / 2} y={MONTH_H + H + 27}
+                  textAnchor="middle" fontSize="9" fontWeight="600"
+                  fill={d.isToday ? 'rgba(129,140,248,0.8)' : 'rgba(100,116,139,0.45)'}
+                >
+                  {d.kits}к
+                </text>
+              )}
+
               {/* Today indicator dot */}
               {d.isToday && (
-                <circle cx={x + BAR_W / 2} cy={MONTH_H + H + 21} r="2.2" fill="#818cf8"/>
+                <circle cx={x + BAR_W / 2} cy={MONTH_H + H + 33} r="2.2" fill="#818cf8"/>
               )}
             </g>
           );

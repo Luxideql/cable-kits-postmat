@@ -2,7 +2,7 @@ import StatsCard from '@/components/StatsCard';
 import PositionsTable from '@/components/PositionsTable';
 import InfoTooltip from '@/components/InfoTooltip';
 import BarChart from '@/components/BarChart';
-import { getKitStats, getDailyReports, getShipments, getShiftCards } from '@/lib/data';
+import { getKitStats, getShipments, getShiftCards } from '@/lib/data';
 import { getTodayDate, formatDate } from '@/lib/calculations';
 import type { DayBar } from '@/components/BarChart';
 import type { ReactNode } from 'react';
@@ -45,9 +45,8 @@ export default async function DashboardPage() {
   const MONTHS_SHORT = ['Січ','Лют','Бер','Кві','Тра','Чер','Лип','Сер','Вер','Жов','Лис','Гру'];
 
   try {
-    const [stats, allReports, shipments, allCards] = await Promise.all([
+    const [stats, shipments, allCards] = await Promise.all([
       getKitStats(),
-      getDailyReports(),
       getShipments(),
       getShiftCards(),
     ]);
@@ -66,9 +65,17 @@ export default async function DashboardPage() {
     cardsTodayCount = confirmedCards.filter(c => c.date === today).length;
     cardsWeekQty    = confirmedCards.filter(c => c.date >= weekAgo).reduce((s, c) => s + cardQty(c), 0);
 
-    // Build all-time daily chart data
+    // Build all-time daily chart data from confirmed ShiftCards
+    const unitsPerKit = stats.positions
+      .filter(p => p.qtyPerPostomat > 0)
+      .reduce((s, p) => s + p.qtyPerPostomat, 0);
+
     const dateMap = new Map<string, number>();
-    for (const r of allReports) dateMap.set(r.date, (dateMap.get(r.date) ?? 0) + r.qty);
+    for (const c of confirmedCards) {
+      const items = c.fact_items.length > 0 ? c.fact_items : c.plan_items;
+      const units = items.reduce((s, i) => s + i.qty, 0);
+      dateMap.set(c.date, (dateMap.get(c.date) ?? 0) + units);
+    }
     const firstDate = Array.from(dateMap.keys()).sort()[0];
     if (firstDate) {
       const cur = new Date(firstDate);
@@ -80,9 +87,11 @@ export default async function DashboardPage() {
         const mo  = cur.getMonth();
         const nm  = mo !== prevMonth;
         if (nm) prevMonth = mo;
+        const value = dateMap.get(ds) ?? 0;
         allDays.push({
           label: d,
-          value: dateMap.get(ds) ?? 0,
+          value,
+          kits: unitsPerKit > 0 ? Math.floor(value / unitsPerKit) : 0,
           isToday: ds === today,
           newMonth: nm,
           monthLabel: nm ? MONTHS_SHORT[mo] : '',
