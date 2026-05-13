@@ -305,6 +305,12 @@ export default function WorkPlanCalculator({ positions }: Props) {
     return { planItems, projectedKits, stockKits, kitsGain: projectedKits - stockKits, deficitRows };
   }, [localPositions, totalPlan]);
 
+  const unitsPerKit = useMemo(
+    () => localPositions.filter(p => p.qtyPerPostomat > 0).reduce((s, p) => s + p.qtyPerPostomat, 0),
+    [localPositions]
+  );
+  const toKits = (units: number) => unitsPerKit > 0 ? Math.floor(units / unitsPerKit) : 0;
+
   function getFact(posId: string, planned: number) { return factMap[posId] ?? planned; }
   function setFact(posId: string, val: number) { setFactMap(prev => ({ ...prev, [posId]: val })); }
 
@@ -641,23 +647,28 @@ export default function WorkPlanCalculator({ positions }: Props) {
               <span className="text-[15px] font-bold text-c2 tabular-nums">
                 {cardItems.reduce((s, i) => s + i.qty, 0)} шт
               </span>
+              {(() => { const k = toKits(cardItems.reduce((s,i)=>s+i.qty,0)); return k > 0 && <span className="text-[12px] text-c4 tabular-nums ml-1">≈{k} к.</span>; })()}
             </div>
-            {isIssued && (
-              <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-c4 mr-2">Факт</span>
-                <span className="text-[15px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                  {cardItems.reduce((s, i) => s + getFact(i.posId, i.qty), 0)} шт
-                </span>
-              </div>
-            )}
-            {isConfirmed && (
-              <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-c4 mr-2">Факт</span>
-                <span className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                  {todayCard!.fact_items.reduce((s, i) => s + i.qty, 0)} шт
-                </span>
-              </div>
-            )}
+            {isIssued && (() => {
+              const factUnits = cardItems.reduce((s, i) => s + getFact(i.posId, i.qty), 0);
+              return (
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-c4 mr-2">Факт</span>
+                  <span className="text-[15px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{factUnits} шт</span>
+                  {toKits(factUnits) > 0 && <span className="text-[12px] text-indigo-400/70 tabular-nums ml-1">≈{toKits(factUnits)} к.</span>}
+                </div>
+              );
+            })()}
+            {isConfirmed && (() => {
+              const factUnits = todayCard!.fact_items.reduce((s, i) => s + i.qty, 0);
+              return (
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-c4 mr-2">Факт</span>
+                  <span className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{factUnits} шт</span>
+                  {toKits(factUnits) > 0 && <span className="text-[12px] text-emerald-500/70 tabular-nums ml-1">≈{toKits(factUnits)} к.</span>}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex items-center gap-2">
@@ -831,6 +842,9 @@ export default function WorkPlanCalculator({ positions }: Props) {
                               </span>
                               <span className="text-[12px] text-c3 tabular-nums">
                                 {factTotal} шт
+                                {toKits(factTotal) > 0 && (
+                                  <span className="text-c4 ml-1">· {toKits(factTotal)} к.</span>
+                                )}
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-2 mt-1">
