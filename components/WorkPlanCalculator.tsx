@@ -274,12 +274,11 @@ export default function WorkPlanCalculator({ positions }: Props) {
 
   async function doRecount() {
     setRecounting(true);
-    const today = isoToday();
     const active = localPositions.filter(p => p.qtyPerPostomat > 0);
     await Promise.all(active.map(p =>
       fetch('/api/positions/stock', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: p.id, stock: recountMap[p.id] ?? 0, stockDate: today }),
+        body: JSON.stringify({ id: p.id, stock: recountMap[p.id] ?? 0, stockDate: cardDate }),
       })
     ));
     await refreshPositions();
