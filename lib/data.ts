@@ -346,8 +346,15 @@ export async function getShiftCards(): Promise<ShiftCard[]> {
   try {
     await sheetEnsure('ShiftCards', SHIFTCARD_HEADERS);
     const rows = await sheetGet('ShiftCards!A:L');
-    return rowsToObjects(rows).map(parseShiftCard);
+    return rowsToObjects(rows).filter(r => r.id).map(parseShiftCard);
   } catch { return []; }
+}
+
+export async function deleteShiftCard(id: string): Promise<void> {
+  const rows = await sheetGet('ShiftCards!A:L');
+  const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
+  if (idx < 1) return;
+  await sheetUpdate(`ShiftCards!A${idx + 1}:L${idx + 1}`, [['', '', '', '', '', '', '', '', '', '', '', '']]);
 }
 
 export async function addShiftCard(card: Omit<ShiftCard, 'id'>): Promise<{ id: string }> {

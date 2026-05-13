@@ -236,6 +236,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const [confirming,       setConfirming]       = useState(false);
   const [cancelling,       setCancelling]       = useState(false);
   const [restoringId,      setRestoringId]      = useState<string | null>(null);
+  const [deletingId,       setDeletingId]       = useState<string | null>(null);
   const [confirmingHistId, setConfirmingHistId] = useState<string | null>(null);
   const [printData,        setPrintData]        = useState<PrintData | null>(null);
   const [localPositions,   setLocalPositions]   = useState<PositionRow[]>(positions);
@@ -421,6 +422,15 @@ export default function WorkPlanCalculator({ positions }: Props) {
       const updated = { ...card, status: 'issued' as const, cancelled_at: '' };
       setHistoryCards(prev => prev.map(c => c.id === card.id ? updated : c));
     } finally { setRestoringId(null); }
+  }
+
+  async function deleteCard(card: ShiftCard) {
+    if (!confirm(`Видалити картку ${fmtDate(card.date)}? Це незворотньо.`)) return;
+    setDeletingId(card.id);
+    try {
+      await fetch(`/api/workcards/${card.id}`, { method: 'DELETE' });
+      setHistoryCards(prev => prev.filter(c => c.id !== card.id));
+    } finally { setDeletingId(null); }
   }
 
   async function confirmHistoryCard(card: ShiftCard) {
@@ -829,13 +839,22 @@ export default function WorkPlanCalculator({ positions }: Props) {
                               <PrintIcon />
                             </button>
                             {card.status === 'cancelled' && (
-                              <button type="button" onClick={() => restoreCard(card)} disabled={restoringId === card.id}
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40"
-                                style={{ border: '1px solid #6366f1', color: '#6366f1' }}
-                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(99,102,241,0.08)')}
-                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
-                                {restoringId === card.id ? '...' : '↩ Відновити'}
-                              </button>
+                              <>
+                                <button type="button" onClick={() => restoreCard(card)} disabled={restoringId === card.id}
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40"
+                                  style={{ border: '1px solid #6366f1', color: '#6366f1' }}
+                                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(99,102,241,0.08)')}
+                                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+                                  {restoringId === card.id ? '...' : '↩ Відновити'}
+                                </button>
+                                <button type="button" onClick={() => deleteCard(card)} disabled={deletingId === card.id}
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40"
+                                  style={{ border: '1px solid #ef4444', color: '#ef4444' }}
+                                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)')}
+                                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+                                  {deletingId === card.id ? '...' : '🗑 Видалити'}
+                                </button>
+                              </>
                             )}
                             {card.status === 'issued' && (
                               <button type="button" onClick={() => confirmHistoryCard(card)} disabled={confirmingHistId === card.id}
