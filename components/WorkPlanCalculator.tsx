@@ -25,6 +25,10 @@ type PrintData = {
 
 function isoToday() { return new Date().toISOString().split('T')[0]; }
 function fmtDate(iso: string) { return iso.split('-').reverse().join('.'); }
+function nextDay(iso: string) {
+  const d = new Date(iso); d.setDate(d.getDate() + 1);
+  return d.toISOString().split('T')[0];
+}
 
 // ── Stepper ──────────────────────────────────────────────────────────────────
 function Stepper({ label, value, onChange, disabled }: {
@@ -234,6 +238,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const [restoringId,      setRestoringId]      = useState<string | null>(null);
   const [confirmingHistId, setConfirmingHistId] = useState<string | null>(null);
   const [printData,        setPrintData]        = useState<PrintData | null>(null);
+  const [localPositions,   setLocalPositions]   = useState<PositionRow[]>(positions);
 
   // Derived: active (non-cancelled) card for selected date
   const todayCard = useMemo(
@@ -255,6 +260,15 @@ export default function WorkPlanCalculator({ positions }: Props) {
       .finally(() => setHistoryLoading(false));
   }, []);
 
+  async function refreshPositions() {
+    const res = await fetch('/api/positions');
+    const { positions: fresh } = await res.json();
+    setLocalPositions(prev => prev.map(p => {
+      const f = (fresh as { id: string; available: number }[]).find(x => x.id === p.id);
+      return f ? { ...p, available: f.available } : p;
+    }));
+  }
+
   // Pre-fill factMap when an issued card becomes active for the selected date
   useEffect(() => {
     if (todayCard?.status !== 'issued') return;
@@ -267,7 +281,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const totalPlan = workers * planPerWorker;
 
   const { planItems, projectedKits, stockKits, kitsGain, deficitRows } = useMemo(() => {
-    const active = positions.filter(p => p.qtyPerPostomat > 0);
+    const active = localPositions.filter(p => p.qtyPerPostomat > 0);
     if (!active.length) return { planItems: [], projectedKits: 0, stockKits: 0, kitsGain: 0, deficitRows: [] };
 
     const stockKits = Math.min(...active.map(p => Math.floor(p.available / p.qtyPerPostomat)));
@@ -288,7 +302,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
       .sort((a, b) => a.currentKits - b.currentKits);
 
     return { planItems, projectedKits, stockKits, kitsGain: projectedKits - stockKits, deficitRows };
-  }, [positions, totalPlan]);
+  }, [localPositions, totalPlan]);
 
   function getFact(posId: string, planned: number) { return factMap[posId] ?? planned; }
   function setFact(posId: string, val: number) { setFactMap(prev => ({ ...prev, [posId]: val })); }
@@ -367,6 +381,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
 
       const updated = { ...todayCard, status: 'confirmed' as const, fact_items, fixed_at: now, stock_applied: true };
       setHistoryCards(prev => prev.map(c => c.id === todayCard.id ? updated : c));
+      await refreshPositions();
     } finally { setConfirming(false); }
   }
 
@@ -392,6 +407,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
       });
       const updated = { ...card, status: 'cancelled' as const, cancelled_at: now };
       setHistoryCards(prev => prev.map(c => c.id === card.id ? updated : c));
+      if (card.stock_applied) await refreshPositions();
     } finally { setCancelling(false); }
   }
 
@@ -624,6 +640,13 @@ export default function WorkPlanCalculator({ positions }: Props) {
             {isConfirmed ? (
               <>
                 <span className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">✓ Зафіксовано на склад</span>
+                <button type="button" onClick={() => setCardDate(nextDay(cardMeta.date))}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white"
+                  style={{ backgroundColor: '#d97706' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#b45309')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d97706')}>
+                  ＋ Нова зміна
+                </button>
                 <button type="button" onClick={() => cancelCard(todayCard!)} disabled={cancelling}
                   className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40"
                   style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}
