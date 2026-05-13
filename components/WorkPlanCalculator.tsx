@@ -237,6 +237,9 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const [printData,        setPrintData]        = useState<PrintData | null>(null);
   const [localPositions,   setLocalPositions]   = useState<PositionRow[]>(positions);
   const [newCardMode,      setNewCardMode]      = useState(false);
+  const [showRecount,     setShowRecount]      = useState(false);
+  const [recountMap,      setRecountMap]       = useState<Record<string, number>>({});
+  const [recounting,      setRecounting]       = useState(false);
 
   // Derived: active (non-cancelled) card for selected date
   const todayCard = useMemo(
@@ -267,6 +270,21 @@ export default function WorkPlanCalculator({ positions }: Props) {
       const f = (fresh as { id: string; available: number }[]).find(x => x.id === p.id);
       return f ? { ...p, available: f.available } : p;
     }));
+  }
+
+  async function doRecount() {
+    setRecounting(true);
+    const today = isoToday();
+    const active = localPositions.filter(p => p.qtyPerPostomat > 0);
+    await Promise.all(active.map(p =>
+      fetch('/api/positions/stock', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id, stock: recountMap[p.id] ?? 0, stockDate: today }),
+      })
+    ));
+    await refreshPositions();
+    setShowRecount(false);
+    setRecounting(false);
   }
 
   // Reset newCardMode when user changes the date
@@ -768,6 +786,70 @@ export default function WorkPlanCalculator({ positions }: Props) {
           </div>
         </div>
       )}
+
+      {/* Recount */}
+      <div className="card overflow-hidden">
+        <button type="button"
+          onClick={() => {
+            if (!showRecount) {
+              const m: Record<string, number> = {};
+              localPositions.filter(p => p.qtyPerPostomat > 0).forEach(p => { m[p.id] = Math.max(0, p.available); });
+              setRecountMap(m);
+            }
+            setShowRecount(v => !v);
+          }}
+          className="w-full px-5 py-3 flex items-center justify-between text-left transition-colors"
+          style={{ backgroundColor: showRecount ? 'rgba(99,102,241,0.05)' : '' }}
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
+          onMouseLeave={e => (e.currentTarget.style.backgroundColor = showRecount ? 'rgba(99,102,241,0.05)' : '')}>
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-c4">Перерахунок складу</span>
+            <span className="text-[11px] text-c4">· встановити реальні залишки</span>
+          </div>
+          <span className="text-[13px] text-c4">{showRecount ? '▲' : '▼'}</span>
+        </button>
+
+        {showRecount && (
+          <div style={{ borderTop: '1px solid var(--cbrd)' }}>
+            <p className="px-5 pt-3 pb-1 text-[12px] text-c4">
+              Введіть скільки штук кожної позиції є <b>фізично на складі зараз</b>. Програма збереже дату сьогодні як точку відліку.
+            </p>
+            <div className="px-5 pb-4 space-y-2 mt-2">
+              {localPositions.filter(p => p.qtyPerPostomat > 0).map(p => (
+                <div key={p.id} className="flex items-center gap-3">
+                  <span className="text-[13px] font-semibold text-c2 w-20 shrink-0">{p.lengthMm} мм</span>
+                  <span className="text-[11px] text-c4 w-24 shrink-0">×{p.qtyPerPostomat} шт/компл</span>
+                  <input
+                    type="number" min={0}
+                    value={recountMap[p.id] ?? 0}
+                    onChange={e => {
+                      const v = parseInt(e.target.value);
+                      setRecountMap(prev => ({ ...prev, [p.id]: isNaN(v) ? 0 : v }));
+                    }}
+                    className="w-24 h-8 px-2.5 text-[14px] font-bold text-c1 bg-transparent outline-none tabular-nums rounded-lg"
+                    style={{ border: '1px solid var(--cbrd)' }}
+                  />
+                  <span className="text-[12px] text-c4">шт → {Math.floor((recountMap[p.id] ?? 0) / p.qtyPerPostomat)} компл.</span>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 pb-4 flex items-center gap-2">
+              <button type="button" onClick={doRecount} disabled={recounting}
+                className="px-4 py-1.5 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: '#059669' }}
+                onMouseEnter={e => { if (!recounting) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#047857'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#059669'; }}>
+                {recounting ? 'Збереження...' : '✓ Зберегти перерахунок'}
+              </button>
+              <button type="button" onClick={() => setShowRecount(false)}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors"
+                style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}>
+                Скасувати
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* History */}
       <div className="card overflow-hidden">
