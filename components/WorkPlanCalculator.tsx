@@ -305,11 +305,18 @@ export default function WorkPlanCalculator({ positions }: Props) {
     return { planItems, projectedKits, stockKits, kitsGain: projectedKits - stockKits, deficitRows };
   }, [localPositions, totalPlan]);
 
-  const unitsPerKit = useMemo(
-    () => localPositions.filter(p => p.qtyPerPostomat > 0).reduce((s, p) => s + p.qtyPerPostomat, 0),
+  const posQtyMap = useMemo(
+    () => new Map(localPositions.filter(p => p.qtyPerPostomat > 0).map(p => [p.id, p.qtyPerPostomat])),
     [localPositions]
   );
-  const toKits = (units: number) => unitsPerKit > 0 ? Math.floor(units / unitsPerKit) : 0;
+  // Accurate kit count: min(qty / qtyPerPostomat) across all items in the card
+  const cardKits = (items: ShiftCardItem[]): number => {
+    if (items.length === 0) return 0;
+    const vals = items
+      .map(it => { const q = posQtyMap.get(it.posId) ?? 0; return q > 0 ? Math.floor(it.qty / q) : null; })
+      .filter((v): v is number => v !== null);
+    return vals.length > 0 ? Math.min(...vals) : 0;
+  };
 
   function getFact(posId: string, planned: number) { return factMap[posId] ?? planned; }
   function setFact(posId: string, val: number) { setFactMap(prev => ({ ...prev, [posId]: val })); }
@@ -373,11 +380,11 @@ export default function WorkPlanCalculator({ positions }: Props) {
       const posRes = await fetch('/api/positions');
       const { positions: cur } = await posRes.json();
       await Promise.all(fact_items.filter(it => it.qty > 0).map(it => {
-        const pos = (cur as { id: string; available: number }[]).find(p => p.id === it.posId);
+        const pos = (cur as { id: string; stock: number; available: number }[]).find(p => p.id === it.posId);
         if (!pos) return Promise.resolve();
         return fetch('/api/positions/stock', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: it.posId, stock: pos.available + it.qty, stockDate: date }),
+          body: JSON.stringify({ id: it.posId, stock: pos.stock + it.qty }),
         });
       }));
 
@@ -400,11 +407,11 @@ export default function WorkPlanCalculator({ positions }: Props) {
         const posRes = await fetch('/api/positions');
         const { positions: cur } = await posRes.json();
         await Promise.all(card.fact_items.filter(it => it.qty > 0).map(it => {
-          const pos = (cur as { id: string; available: number }[]).find(p => p.id === it.posId);
+          const pos = (cur as { id: string; stock: number; available: number }[]).find(p => p.id === it.posId);
           if (!pos) return Promise.resolve();
           return fetch('/api/positions/stock', {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: it.posId, stock: Math.max(0, pos.available - it.qty), stockDate: card.date }),
+            body: JSON.stringify({ id: it.posId, stock: Math.max(0, pos.stock - it.qty) }),
           });
         }));
       }
@@ -439,11 +446,11 @@ export default function WorkPlanCalculator({ positions }: Props) {
         const posRes = await fetch('/api/positions');
         const { positions: cur } = await posRes.json();
         await Promise.all(card.fact_items.filter(it => it.qty > 0).map(it => {
-          const pos = (cur as { id: string; available: number }[]).find(p => p.id === it.posId);
+          const pos = (cur as { id: string; stock: number; available: number }[]).find(p => p.id === it.posId);
           if (!pos) return Promise.resolve();
           return fetch('/api/positions/stock', {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: it.posId, stock: Math.max(0, pos.available - it.qty), stockDate: card.date }),
+            body: JSON.stringify({ id: it.posId, stock: Math.max(0, pos.stock - it.qty) }),
           });
         }));
         await refreshPositions();
@@ -462,11 +469,11 @@ export default function WorkPlanCalculator({ positions }: Props) {
       const posRes     = await fetch('/api/positions');
       const { positions: cur } = await posRes.json();
       await Promise.all(fact_items.filter(it => it.qty > 0).map(it => {
-        const pos = (cur as { id: string; available: number }[]).find(p => p.id === it.posId);
+        const pos = (cur as { id: string; stock: number; available: number }[]).find(p => p.id === it.posId);
         if (!pos) return Promise.resolve();
         return fetch('/api/positions/stock', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: it.posId, stock: pos.available + it.qty, stockDate: card.date }),
+          body: JSON.stringify({ id: it.posId, stock: pos.stock + it.qty }),
         });
       }));
       await fetch(`/api/workcards/${card.id}`, {
@@ -647,25 +654,28 @@ export default function WorkPlanCalculator({ positions }: Props) {
               <span className="text-[15px] font-bold text-c2 tabular-nums">
                 {cardItems.reduce((s, i) => s + i.qty, 0)} шт
               </span>
-              {(() => { const k = toKits(cardItems.reduce((s,i)=>s+i.qty,0)); return k > 0 && <span className="text-[12px] text-c4 tabular-nums ml-1">≈{k} к.</span>; })()}
+              {(() => { const k = cardKits(cardItems); return k > 0 && <span className="text-[12px] text-c4 tabular-nums ml-1">≈{k} к.</span>; })()}
             </div>
             {isIssued && (() => {
-              const factUnits = cardItems.reduce((s, i) => s + getFact(i.posId, i.qty), 0);
+              const factItems = cardItems.map(i => ({ ...i, qty: getFact(i.posId, i.qty) }));
+              const factUnits = factItems.reduce((s, i) => s + i.qty, 0);
+              const k = cardKits(factItems);
               return (
                 <div>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-c4 mr-2">Факт</span>
                   <span className="text-[15px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{factUnits} шт</span>
-                  {toKits(factUnits) > 0 && <span className="text-[12px] text-indigo-400/70 tabular-nums ml-1">≈{toKits(factUnits)} к.</span>}
+                  {k > 0 && <span className="text-[12px] text-indigo-400/70 tabular-nums ml-1">≈{k} к.</span>}
                 </div>
               );
             })()}
             {isConfirmed && (() => {
               const factUnits = todayCard!.fact_items.reduce((s, i) => s + i.qty, 0);
+              const k = cardKits(todayCard!.fact_items);
               return (
                 <div>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-c4 mr-2">Факт</span>
                   <span className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{factUnits} шт</span>
-                  {toKits(factUnits) > 0 && <span className="text-[12px] text-emerald-500/70 tabular-nums ml-1">≈{toKits(factUnits)} к.</span>}
+                  {k > 0 && <span className="text-[12px] text-emerald-500/70 tabular-nums ml-1">≈{k} к.</span>}
                 </div>
               );
             })()}
@@ -842,8 +852,8 @@ export default function WorkPlanCalculator({ positions }: Props) {
                               </span>
                               <span className="text-[12px] text-c3 tabular-nums">
                                 {factTotal} шт
-                                {toKits(factTotal) > 0 && (
-                                  <span className="text-c4 ml-1">· {toKits(factTotal)} к.</span>
+                                {cardKits(histItems) > 0 && (
+                                  <span className="text-c4 ml-1">· {cardKits(histItems)} к.</span>
                                 )}
                               </span>
                             </div>
