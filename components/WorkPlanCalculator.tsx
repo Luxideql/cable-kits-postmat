@@ -372,8 +372,10 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
   const [confirmedAccum, setConfirmedAccum] = useState<Map<string, number>>(new Map());
   const [cardIds, setCardIds]               = useState<Record<number, string>>(saved?.cardIds ?? {});
   const [cancelling, setCancelling]         = useState<number | null>(null);
-  const [historyCards, setHistoryCards]     = useState<WorkCard[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyCards, setHistoryCards]       = useState<WorkCard[]>([]);
+  const [historyLoading, setHistoryLoading]   = useState(false);
+  const [confirmingHistory, setConfirmingHistory] = useState<string | null>(null);
+  const [restoringHistory, setRestoringHistory]   = useState<string | null>(null);
   const [reportingOn, setReportingOn] = useState<boolean>(() => {
     try { return JSON.parse(localStorage.getItem('workplan_reporting') ?? 'true'); } catch { return true; }
   });
@@ -574,6 +576,67 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
     });
     if (res.ok) {
       setHistoryCards(prev => prev.map(c => c.id === card.id ? { ...c, status: 'cancelled' } : c));
+    }
+  }
+
+  async function restoreHistoryCard(card: WorkCard) {
+    setRestoringHistory(card.id);
+    try {
+      const res = await fetch(`/api/workcards/${card.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'issued' }),
+      });
+      if (res.ok) {
+        setHistoryCards(prev => prev.map(c => c.id === card.id ? { ...c, status: 'issued' } : c));
+      }
+    } finally {
+      setRestoringHistory(null);
+    }
+  }
+
+  async function confirmHistoryCard(card: WorkCard) {
+    if (!confirm(`Зафіксувати карточку ${card.employeeName} на склад?`)) return;
+    setConfirmingHistory(card.id);
+    try {
+      const todayISO = new Date().toISOString().split('T')[0];
+
+      // Отримуємо актуальний залишок позицій
+      const posRes = await fetch('/api/positions');
+      const { positions: currentPositions } = await posRes.json();
+
+      // Записуємо щоденні звіти
+      await Promise.all(card.tasks.map(t => {
+        if (t.actualQty <= 0) return Promise.resolve();
+        return fetch('/api/reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId: card.employeeId || card.employeeName, positionId: t.posId, qty: t.actualQty }),
+        });
+      }));
+
+      // Оновлюємо склад
+      await Promise.all(card.tasks.map(t => {
+        if (t.actualQty <= 0) return Promise.resolve();
+        const pos = (currentPositions as { id: string; available: number }[]).find(p => p.id === t.posId);
+        if (!pos) return Promise.resolve();
+        return fetch('/api/positions/stock', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: t.posId, stock: pos.available + t.actualQty, stockDate: todayISO }),
+        });
+      }));
+
+      // Змінюємо статус картки
+      await fetch(`/api/workcards/${card.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'confirmed' }),
+      });
+
+      setHistoryCards(prev => prev.map(c => c.id === card.id ? { ...c, status: 'confirmed' } : c));
+    } finally {
+      setConfirmingHistory(null);
     }
   }
 
@@ -1162,18 +1225,46 @@ export default function WorkPlanCalculator({ positions, employees = [] }: Props)
                             ))}
                           </div>
                         </div>
-                        {card.status !== 'cancelled' && (
-                          <button
-                            type="button"
-                            onClick={() => cancelHistoryCard(card)}
-                            className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors"
-                            style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}
-                            onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--cc4)')}
-                          >
-                            Скасувати
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {card.status === 'cancelled' && (
+                            <button
+                              type="button"
+                              onClick={() => restoreHistoryCard(card)}
+                              disabled={restoringHistory === card.id}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40"
+                              style={{ border: '1px solid #6366f1', color: '#6366f1' }}
+                              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(99,102,241,0.08)')}
+                              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                            >
+                              {restoringHistory === card.id ? '...' : '↩ Відновити'}
+                            </button>
+                          )}
+                          {card.status === 'issued' && (
+                            <button
+                              type="button"
+                              onClick={() => confirmHistoryCard(card)}
+                              disabled={confirmingHistory === card.id}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-40"
+                              style={{ border: '1px solid #059669', color: '#059669' }}
+                              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(5,150,105,0.08)')}
+                              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                            >
+                              {confirmingHistory === card.id ? '...' : '✓ Зафіксувати'}
+                            </button>
+                          )}
+                          {card.status !== 'cancelled' && (
+                            <button
+                              type="button"
+                              onClick={() => cancelHistoryCard(card)}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors"
+                              style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}
+                              onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                              onMouseLeave={e => (e.currentTarget.style.color = 'var(--cc4)')}
+                            >
+                              Скасувати
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
