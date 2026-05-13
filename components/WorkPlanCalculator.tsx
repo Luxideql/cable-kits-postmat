@@ -17,6 +17,11 @@ type ShiftCard = {
   plan_items: ShiftCardItem[]; fact_items: ShiftCardItem[];
   created_at: string; fixed_at: string; cancelled_at: string;
 };
+type PrintData = {
+  card: { date: string; workers_count: number; plan_per_worker: number; total_plan: number };
+  items: ShiftCardItem[];
+  label: string;
+};
 
 function isoToday() { return new Date().toISOString().split('T')[0]; }
 function fmtDate(iso: string) { return iso.split('-').reverse().join('.'); }
@@ -93,13 +98,15 @@ const PrintIcon = () => (
   </svg>
 );
 
-function PrintModal({ card, items, onClose }: {
-  card: { date: string; workers_count: number; plan_per_worker: number };
+function PrintModal({ card, items, label, onClose }: {
+  card: { date: string; workers_count: number; plan_per_worker: number; total_plan: number };
   items: ShiftCardItem[];
+  label: string;
   onClose: () => void;
 }) {
   const dateDisp = fmtDate(card.date);
   const total    = items.reduce((s, i) => s + i.qty, 0);
+  const title    = label || `Зміна ${dateDisp}`;
 
   function handlePrint() {
     const rows = items.map(t => `
@@ -115,7 +122,8 @@ function PrintModal({ card, items, onClose }: {
     </head><body><div style="padding:36px 48px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
         <div>
-          <div style="font-size:24px;font-weight:800;color:#111827">Зміна ${dateDisp}</div>
+          <div style="font-size:24px;font-weight:800;color:#111827">${title}</div>
+          ${label ? `<div style="font-size:13px;color:#374151;margin-top:2px">${dateDisp}</div>` : ''}
           <div style="font-size:13px;color:#6b7280;margin-top:4px">${card.workers_count} прац. × ${card.plan_per_worker} шт</div>
         </div>
         <div style="text-align:right">
@@ -149,7 +157,7 @@ function PrintModal({ card, items, onClose }: {
     <div className="fixed inset-0 z-[100] flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
       <div className="flex items-center justify-between px-6 py-3 shrink-0"
            style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb' }}>
-        <p style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>Попередній перегляд · {dateDisp}</p>
+        <p style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{title} · {dateDisp}</p>
         <div className="flex items-center gap-2">
           <button onClick={onClose}
             style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '13px', color: '#6b7280', cursor: 'pointer', background: 'none', border: 'none' }}>
@@ -165,7 +173,8 @@ function PrintModal({ card, items, onClose }: {
         <div style={{ maxWidth: '794px', margin: '0 auto', backgroundColor: '#fff', boxShadow: '0 4px 24px rgba(0,0,0,0.18)', padding: '28px 36px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
             <div>
-              <p style={{ fontSize: '22px', fontWeight: 800, color: '#111827', margin: 0 }}>Зміна {dateDisp}</p>
+              <p style={{ fontSize: '22px', fontWeight: 800, color: '#111827', margin: 0 }}>{title}</p>
+              {label && <p style={{ fontSize: '13px', color: '#374151', marginTop: '2px' }}>{dateDisp}</p>}
               <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>{card.workers_count} прац. × {card.plan_per_worker} шт</p>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -214,8 +223,9 @@ export default function WorkPlanCalculator({ positions }: Props) {
 
   const [workers,       setWorkers]       = useState<number>(saved?.workers       ?? 3);
   const [planPerWorker, setPlanPerWorker] = useState<number>(saved?.planPerWorker ?? 40);
+  const [cardDate,      setCardDate]      = useState<string>(saved?.cardDate      ?? isoToday());
+  const [label,         setLabel]         = useState<string>(saved?.label         ?? '');
   const [factMap,       setFactMap]       = useState<Record<string, number>>({});
-  const [todayCard,     setTodayCard]     = useState<ShiftCard | null>(null);
   const [historyCards,  setHistoryCards]  = useState<ShiftCard[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [issuing,          setIssuing]          = useState(false);
@@ -223,32 +233,36 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const [cancelling,       setCancelling]       = useState(false);
   const [restoringId,      setRestoringId]      = useState<string | null>(null);
   const [confirmingHistId, setConfirmingHistId] = useState<string | null>(null);
-  const [showPrint,        setShowPrint]        = useState(false);
+  const [printData,        setPrintData]        = useState<PrintData | null>(null);
+
+  // Derived: active (non-cancelled) card for selected date
+  const todayCard = useMemo(
+    () => historyCards.find(c => c.date === cardDate && c.status !== 'cancelled') ?? null,
+    [historyCards, cardDate]
+  );
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker }));
-  }, [workers, planPerWorker]);
+    localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, cardDate, label }));
+  }, [workers, planPerWorker, cardDate, label]);
 
   useEffect(() => {
     setHistoryLoading(true);
     fetch('/api/workcards')
       .then(r => r.json())
       .then((cards: ShiftCard[]) => {
-        const sorted = [...cards].sort((a, b) => b.date.localeCompare(a.date));
-        setHistoryCards(sorted);
-        const today  = isoToday();
-        const active = sorted.find(c => c.date === today && c.status !== 'cancelled');
-        if (active) {
-          setTodayCard(active);
-          if (active.status === 'issued') {
-            const m: Record<string, number> = {};
-            for (const it of active.plan_items) m[it.posId] = it.qty;
-            setFactMap(m);
-          }
-        }
+        setHistoryCards([...cards].sort((a, b) => b.date.localeCompare(a.date)));
       })
       .finally(() => setHistoryLoading(false));
   }, []);
+
+  // Pre-fill factMap when an issued card becomes active for the selected date
+  useEffect(() => {
+    if (todayCard?.status !== 'issued') return;
+    const m: Record<string, number> = {};
+    for (const it of todayCard.plan_items) m[it.posId] = it.qty;
+    setFactMap(m);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayCard?.id]);
 
   const totalPlan = workers * planPerWorker;
 
@@ -283,7 +297,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const isConfirmed = todayCard?.status === 'confirmed';
   const hasCard     = isIssued || isConfirmed;
 
-  // Items shown in the card
   const cardItems: ShiftCardItem[] = isConfirmed
     ? todayCard!.fact_items
     : isIssued
@@ -292,16 +305,16 @@ export default function WorkPlanCalculator({ positions }: Props) {
 
   const cardMeta = hasCard
     ? { workers_count: todayCard!.workers_count, plan_per_worker: todayCard!.plan_per_worker, total_plan: todayCard!.total_plan, date: todayCard!.date }
-    : { workers_count: workers, plan_per_worker: planPerWorker, total_plan: totalPlan, date: isoToday() };
+    : { workers_count: workers, plan_per_worker: planPerWorker, total_plan: totalPlan, date: cardDate };
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
   async function issueCard() {
     setIssuing(true);
-    const now   = new Date().toISOString();
-    const today = isoToday();
-    const body  = {
-      date: today, workers_count: workers, plan_per_worker: planPerWorker, total_plan: totalPlan,
+    const now  = new Date().toISOString();
+    const body = {
+      date: cardDate,
+      workers_count: workers, plan_per_worker: planPerWorker, total_plan: totalPlan,
       status: 'issued' as const, stock_applied: false,
       plan_items: planItems, fact_items: planItems,
       created_at: now, fixed_at: '', cancelled_at: '',
@@ -312,8 +325,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
       });
       const { id } = await res.json();
       const card: ShiftCard = { id, ...body };
-      setTodayCard(card);
-      setHistoryCards(prev => [card, ...prev]);
+      setHistoryCards(prev => [card, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
       const m: Record<string, number> = {};
       for (const it of planItems) m[it.posId] = it.qty;
       setFactMap(m);
@@ -324,21 +336,19 @@ export default function WorkPlanCalculator({ positions }: Props) {
     if (!todayCard) return;
     setConfirming(true);
     try {
-      const now   = new Date().toISOString();
-      const today = isoToday();
+      const now  = new Date().toISOString();
+      const date = todayCard.date;
       const fact_items: ShiftCardItem[] = todayCard.plan_items.map(it => ({
         posId: it.posId, lengthMm: it.lengthMm, qty: getFact(it.posId, it.qty),
       }));
 
-      // Post DailyReports (for bar chart history)
       await Promise.all(fact_items.filter(it => it.qty > 0).map(it =>
         fetch('/api/reports', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employeeId: 'shift', positionId: it.posId, qty: it.qty, date: today }),
+          body: JSON.stringify({ employeeId: 'shift', positionId: it.posId, qty: it.qty, date }),
         })
       ));
 
-      // Update stock
       const posRes = await fetch('/api/positions');
       const { positions: cur } = await posRes.json();
       await Promise.all(fact_items.filter(it => it.qty > 0).map(it => {
@@ -346,7 +356,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
         if (!pos) return Promise.resolve();
         return fetch('/api/positions/stock', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: it.posId, stock: pos.available + it.qty, stockDate: today }),
+          body: JSON.stringify({ id: it.posId, stock: pos.available + it.qty, stockDate: date }),
         });
       }));
 
@@ -356,7 +366,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
       });
 
       const updated = { ...todayCard, status: 'confirmed' as const, fact_items, fixed_at: now, stock_applied: true };
-      setTodayCard(updated);
       setHistoryCards(prev => prev.map(c => c.id === todayCard.id ? updated : c));
     } finally { setConfirming(false); }
   }
@@ -382,7 +391,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
         body: JSON.stringify({ status: 'cancelled', cancelled_at: now }),
       });
       const updated = { ...card, status: 'cancelled' as const, cancelled_at: now };
-      if (todayCard?.id === card.id) setTodayCard(null);
       setHistoryCards(prev => prev.map(c => c.id === card.id ? updated : c));
     } finally { setCancelling(false); }
   }
@@ -396,12 +404,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
       });
       const updated = { ...card, status: 'issued' as const, cancelled_at: '' };
       setHistoryCards(prev => prev.map(c => c.id === card.id ? updated : c));
-      if (card.date === isoToday()) {
-        setTodayCard(updated);
-        const m: Record<string, number> = {};
-        for (const it of card.plan_items) m[it.posId] = it.qty;
-        setFactMap(m);
-      }
     } finally { setRestoringId(null); }
   }
 
@@ -463,11 +465,14 @@ export default function WorkPlanCalculator({ positions }: Props) {
             <InfoTooltip>
               <p><b>Кількість працівників</b> — скільки людей у зміні.</p>
               <p><b>План на 1 прац.</b> — скільки штук має зробити один працівник.</p>
+              <p><b>Дата зміни</b> — можна вибрати будь-яку дату для створення картки.</p>
+              <p><b>Назва зміни</b> — довільна позначка (відображається на картці та у друку).</p>
               <p><b>Загальний план</b> = Працівники × План. Алгоритм розподіляє цю суму між дефіцитними позиціями.</p>
               {hasCard && <p className="pt-1" style={{borderTop:'1px solid var(--cbrd)'}}>Параметри зафіксовані в картці зміни. Скасуйте картку щоб змінити.</p>}
             </InfoTooltip>
           </div>
-          <button type="button" onClick={() => setShowPrint(true)}
+          <button type="button"
+            onClick={() => setPrintData({ card: cardMeta, items: isConfirmed ? todayCard!.fact_items : cardItems, label })}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-indigo-600 dark:text-indigo-400 transition-colors"
             style={{ border: '1px solid var(--cbrd)' }}
             onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--chov)')}
@@ -478,6 +483,31 @@ export default function WorkPlanCalculator({ positions }: Props) {
         <div className="flex flex-wrap gap-6 items-end">
           <Stepper label="Кількість працівників" value={hasCard ? cardMeta.workers_count : workers} onChange={setWorkers} disabled={hasCard} />
           <Stepper label="План на 1 прац. (шт)"  value={hasCard ? cardMeta.plan_per_worker : planPerWorker} onChange={setPlanPerWorker} disabled={hasCard} />
+          {/* Date picker */}
+          <div>
+            <p className="text-[12px] font-medium text-c4 mb-2">Дата зміни</p>
+            <input
+              type="date"
+              value={hasCard ? cardMeta.date : cardDate}
+              disabled={hasCard}
+              onChange={e => { if (e.target.value) setCardDate(e.target.value); }}
+              className="h-8 px-2.5 text-[13px] font-semibold text-c1 bg-transparent outline-none rounded-lg disabled:opacity-40"
+              style={{ border: '1px solid var(--cbrd)' }}
+            />
+          </div>
+          {/* Custom label */}
+          <div>
+            <p className="text-[12px] font-medium text-c4 mb-2">Назва зміни</p>
+            <input
+              type="text"
+              value={label}
+              placeholder="необов."
+              maxLength={50}
+              onChange={e => setLabel(e.target.value)}
+              className="h-8 px-2.5 text-[13px] font-medium text-c1 bg-transparent outline-none rounded-lg"
+              style={{ border: '1px solid var(--cbrd)', minWidth: '130px' }}
+            />
+          </div>
           <div>
             <p className="text-[12px] font-medium text-c4 mb-2">Загальний план</p>
             <p className="text-[26px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums leading-none">
@@ -511,10 +541,10 @@ export default function WorkPlanCalculator({ positions }: Props) {
             </div>
             <div>
               <p className="text-[14px] font-semibold text-c1">
-                Зміна {fmtDate(cardMeta.date)}
+                {label || `Зміна ${fmtDate(cardMeta.date)}`}
               </p>
               <p className="text-[11px] text-c4 mt-0.5">
-                {cardMeta.workers_count} прац. × {cardMeta.plan_per_worker} шт = {cardMeta.total_plan} шт
+                {label && `${fmtDate(cardMeta.date)} · `}{cardMeta.workers_count} прац. × {cardMeta.plan_per_worker} шт = {cardMeta.total_plan} шт
               </p>
             </div>
           </div>
@@ -736,6 +766,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
                   {byDate.get(date)!.map(card => {
                     const factTotal = (card.status === 'confirmed' ? card.fact_items : card.plan_items)
                       .reduce((s, i) => s + i.qty, 0);
+                    const histItems = card.status === 'confirmed' ? card.fact_items : card.plan_items;
                     return (
                       <div key={card.id} className="px-5 py-3" style={{ borderBottom: '1px solid var(--cbrd)' }}>
                         <div className="flex items-start justify-between gap-3">
@@ -756,7 +787,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-2 mt-1">
-                              {(card.status === 'confirmed' ? card.fact_items : card.plan_items).map(it => (
+                              {histItems.map(it => (
                                 <span key={it.posId} className="text-[12px] text-c4">
                                   {it.lengthMm} мм: <span className="font-semibold text-c2">{it.qty}</span>
                                 </span>
@@ -764,6 +795,16 @@ export default function WorkPlanCalculator({ positions }: Props) {
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Print history card */}
+                            <button type="button"
+                              onClick={() => setPrintData({ card, items: histItems, label: '' })}
+                              title="Друкувати"
+                              className="w-7 h-7 flex items-center justify-center rounded-lg text-c4 transition-colors"
+                              style={{ border: '1px solid var(--cbrd)' }}
+                              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--chov)'; e.currentTarget.style.color = 'var(--cc2)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = ''; }}>
+                              <PrintIcon />
+                            </button>
                             {card.status === 'cancelled' && (
                               <button type="button" onClick={() => restoreCard(card)} disabled={restoringId === card.id}
                                 className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40"
@@ -804,11 +845,12 @@ export default function WorkPlanCalculator({ positions }: Props) {
       </div>
 
       {/* Print modal */}
-      {showPrint && (
+      {printData && (
         <PrintModal
-          card={cardMeta}
-          items={isConfirmed ? todayCard!.fact_items : cardItems}
-          onClose={() => setShowPrint(false)}
+          card={printData.card}
+          items={printData.items}
+          label={printData.label}
+          onClose={() => setPrintData(null)}
         />
       )}
     </div>
