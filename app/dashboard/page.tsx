@@ -37,7 +37,6 @@ function SectionHeader({ title, sub, children }: { title: string; sub?: string; 
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
   let kitStats: Awaited<ReturnType<typeof getKitStats>> | null = null;
-  let todayTotal = 0, activeWorkers = 0;
   let allDays: DayBar[] = [];
   let recentShipments: Awaited<ReturnType<typeof getShipments>> = [];
   let cardsTodayQty = 0, cardsTodayCount = 0, cardsWeekQty = 0;
@@ -57,9 +56,6 @@ export default async function DashboardPage() {
 
     const today = getTodayDate();
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-    const todayR = allReports.filter(r => r.date === today);
-    todayTotal    = todayR.reduce((s, r) => s + r.qty, 0);
-    activeWorkers = new Set(todayR.map(r => r.employeeId)).size;
 
     const confirmedCards = allCards.filter(c => c.status === 'confirmed');
     const cardQty = (c: typeof confirmedCards[0]) => c.tasks.reduce((s, t) => s + t.actualQty, 0);
@@ -121,7 +117,6 @@ export default async function DashboardPage() {
           <span className="text-[12px] text-c4 font-medium">Live дані</span>
           <InfoTooltip>
             <p><b>Готових комплектів</b> — мінімум по всіх позиціях прямо зараз.</p>
-            <p><b>Вироблено сьогодні</b> — сума звітів за поточний день.</p>
             <p><b>Вузьке місце</b> — позиція що обмежує кількість комплектів.</p>
             <p><b>Відправлено</b> — загальна кількість відвантажених комплектів за весь час.</p>
             <p><b>Готово до відправки</b> = Готових комплектів − Відправлено.</p>
@@ -131,9 +126,8 @@ export default async function DashboardPage() {
       </div>
 
       {/* KPI Cards — row 1: виробництво */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <StatsCard title="Готових комплектів" value={kitStats.totalKits} sub="мінімум по позиціях" color="indigo" icon={<Ic.Box />}/>
-        <StatsCard title="Вироблено сьогодні" value={`${todayTotal} шт`} sub={`${activeWorkers} прац. активних`} color="emerald" icon={<Ic.Clock />}/>
         <StatsCard title="Позицій" value={kitStats.positions.length} sub={`Всього: ${totalProduced} шт`} color="slate" icon={<Ic.Grid />}/>
         {bn
           ? <StatsCard title="Вузьке місце" value={`${bn.lengthMm} мм`} sub={`${bn.kits} компл. · треба ${bn.remaining}`} color="red" icon={<Ic.Alert />}/>

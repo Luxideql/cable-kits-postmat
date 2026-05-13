@@ -4,7 +4,7 @@ import type { PositionStats } from '@/lib/types';
 import ColInfo from '@/components/ColInfo';
 
 interface Props { positions: PositionStats[] }
-type SortKey = 'lengthMm' | 'stock' | 'produced' | 'available' | 'kits' | 'progress';
+type SortKey = 'lengthMm' | 'stock' | 'available' | 'kits' | 'progress';
 
 const SortIcon = ({ active, asc }: { active: boolean; asc: boolean }) => (
   <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
@@ -104,8 +104,6 @@ export default function PositionsTable({ positions }: Props) {
               </th>
               <TH k="stock" label="Фактичний залишок" align="right"
                 info="Реальна кількість шт на складі на дату переобліку. Клікніть щоб ввести нове значення після фізичного підрахунку." />
-              <TH k="produced" label="Вироблено" align="right"
-                info="Сума звітів робітників через бот ПІСЛЯ дати переобліку по цій позиції." />
               <TH k="available" label="Разом шт" align="right"
                 info="Фактичний залишок + Вироблено після переобліку = скільки шт є зараз." />
               <TH k="kits" label="Комплектів" align="right"
@@ -165,10 +163,6 @@ export default function PositionsTable({ positions }: Props) {
                         </span>
                       </div>
                     )}
-                  </td>
-
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-[14px] font-medium text-emerald-600 dark:text-emerald-400">{p.produced}</span>
                   </td>
 
                   <td className="px-4 py-3 text-right text-[14px] text-c3">{p.available}</td>
