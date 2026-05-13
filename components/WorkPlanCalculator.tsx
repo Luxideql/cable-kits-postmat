@@ -325,7 +325,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
   };
 
   function getFact(posId: string, planned: number) { return factMap[posId] ?? planned; }
-  function setFact(posId: string, val: number) { setFactMap(prev => ({ ...prev, [posId]: val })); }
 
   const isIssued    = effectiveCard?.status === 'issued';
   const isConfirmed = effectiveCard?.status === 'confirmed';
@@ -624,31 +623,19 @@ export default function WorkPlanCalculator({ positions }: Props) {
           </div>
         ) : (
           <div className="divide-y" style={{ borderColor: 'var(--cbrd)' }}>
-            <div className="grid px-5 py-2" style={{ gridTemplateColumns: '1fr auto auto', gap: '16px' }}>
+            <div className="grid px-5 py-2" style={{ gridTemplateColumns: '1fr auto', gap: '16px' }}>
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4">Позиція</span>
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 text-right w-20">План</span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-c4 text-right w-20">Факт</span>
             </div>
-            {cardItems.map(item => {
-              const fact = getFact(item.posId, item.qty);
-              return (
-                <div key={item.posId} className="grid items-center px-5 py-2.5"
-                     style={{ gridTemplateColumns: '1fr auto auto', gap: '16px' }}>
-                  <span className="text-[14px] font-semibold text-c1">{item.lengthMm} мм</span>
-                  <span className="text-[14px] text-c4 tabular-nums text-right w-20">{item.qty} шт</span>
-                  {isConfirmed ? (
-                    <span className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums text-right w-20">{item.qty} шт</span>
-                  ) : isIssued ? (
-                    <input type="number" min={0} value={fact}
-                      onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 0) setFact(item.posId, v); }}
-                      className="w-20 text-right text-[15px] font-bold text-c1 bg-transparent outline-none tabular-nums border-b-2 border-indigo-400/50"
-                    />
-                  ) : (
-                    <span className="text-[14px] text-c4 tabular-nums text-right w-20">—</span>
-                  )}
-                </div>
-              );
-            })}
+            {cardItems.map(item => (
+              <div key={item.posId} className="grid items-center px-5 py-2.5"
+                   style={{ gridTemplateColumns: '1fr auto', gap: '16px' }}>
+                <span className="text-[14px] font-semibold text-c1">{item.lengthMm} мм</span>
+                <span className={`text-[14px] font-bold tabular-nums text-right w-20 ${isConfirmed ? 'text-emerald-600 dark:text-emerald-400' : 'text-c2'}`}>
+                  {item.qty} шт
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
@@ -663,29 +650,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
               </span>
               {(() => { const k = cardKits(cardItems); return k > 0 && <span className="text-[12px] text-c4 tabular-nums ml-1">≈{k} к.</span>; })()}
             </div>
-            {isIssued && (() => {
-              const factItems = cardItems.map(i => ({ ...i, qty: getFact(i.posId, i.qty) }));
-              const factUnits = factItems.reduce((s, i) => s + i.qty, 0);
-              const k = cardKits(factItems);
-              return (
-                <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-c4 mr-2">Факт</span>
-                  <span className="text-[15px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{factUnits} шт</span>
-                  {k > 0 && <span className="text-[12px] text-indigo-400/70 tabular-nums ml-1">≈{k} к.</span>}
-                </div>
-              );
-            })()}
-            {isConfirmed && (() => {
-              const factUnits = effectiveCard!.fact_items.reduce((s, i) => s + i.qty, 0);
-              const k = cardKits(effectiveCard!.fact_items);
-              return (
-                <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-c4 mr-2">Факт</span>
-                  <span className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{factUnits} шт</span>
-                  {k > 0 && <span className="text-[12px] text-emerald-500/70 tabular-nums ml-1">≈{k} к.</span>}
-                </div>
-              );
-            })()}
           </div>
 
           <div className="flex items-center gap-2">
