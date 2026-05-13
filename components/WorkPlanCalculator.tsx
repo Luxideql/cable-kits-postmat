@@ -240,12 +240,15 @@ export default function WorkPlanCalculator({ positions }: Props) {
   const [confirmingHistId, setConfirmingHistId] = useState<string | null>(null);
   const [printData,        setPrintData]        = useState<PrintData | null>(null);
   const [localPositions,   setLocalPositions]   = useState<PositionRow[]>(positions);
+  const [newCardMode,      setNewCardMode]      = useState(false);
 
   // Derived: active (non-cancelled) card for selected date
   const todayCard = useMemo(
     () => historyCards.find(c => c.date === cardDate && c.status !== 'cancelled') ?? null,
     [historyCards, cardDate]
   );
+  // When newCardMode is on — treat the date as having no card (create fresh)
+  const effectiveCard = newCardMode ? null : todayCard;
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({ workers, planPerWorker, cardDate, label }));
@@ -270,14 +273,17 @@ export default function WorkPlanCalculator({ positions }: Props) {
     }));
   }
 
+  // Reset newCardMode when user changes the date
+  useEffect(() => { setNewCardMode(false); }, [cardDate]);
+
   // Pre-fill factMap when an issued card becomes active for the selected date
   useEffect(() => {
-    if (todayCard?.status !== 'issued') return;
+    if (effectiveCard?.status !== 'issued') return;
     const m: Record<string, number> = {};
-    for (const it of todayCard.plan_items) m[it.posId] = it.qty;
+    for (const it of effectiveCard.plan_items) m[it.posId] = it.qty;
     setFactMap(m);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayCard?.id]);
+  }, [effectiveCard?.id]);
 
   const totalPlan = workers * planPerWorker;
 
@@ -321,18 +327,18 @@ export default function WorkPlanCalculator({ positions }: Props) {
   function getFact(posId: string, planned: number) { return factMap[posId] ?? planned; }
   function setFact(posId: string, val: number) { setFactMap(prev => ({ ...prev, [posId]: val })); }
 
-  const isIssued    = todayCard?.status === 'issued';
-  const isConfirmed = todayCard?.status === 'confirmed';
+  const isIssued    = effectiveCard?.status === 'issued';
+  const isConfirmed = effectiveCard?.status === 'confirmed';
   const hasCard     = isIssued || isConfirmed;
 
   const cardItems: ShiftCardItem[] = isConfirmed
-    ? todayCard!.fact_items
+    ? effectiveCard!.fact_items
     : isIssued
-      ? todayCard!.plan_items
+      ? effectiveCard!.plan_items
       : planItems;
 
   const cardMeta = hasCard
-    ? { workers_count: todayCard!.workers_count, plan_per_worker: todayCard!.plan_per_worker, total_plan: todayCard!.total_plan, date: todayCard!.date }
+    ? { workers_count: effectiveCard!.workers_count, plan_per_worker: effectiveCard!.plan_per_worker, total_plan: effectiveCard!.total_plan, date: effectiveCard!.date }
     : { workers_count: workers, plan_per_worker: planPerWorker, total_plan: totalPlan, date: cardDate };
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -354,6 +360,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
       const { id } = await res.json();
       const card: ShiftCard = { id, ...body };
       setHistoryCards(prev => [card, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+      setNewCardMode(false);
       const m: Record<string, number> = {};
       for (const it of planItems) m[it.posId] = it.qty;
       setFactMap(m);
@@ -361,12 +368,12 @@ export default function WorkPlanCalculator({ positions }: Props) {
   }
 
   async function confirmCard() {
-    if (!todayCard) return;
+    if (!effectiveCard) return;
     setConfirming(true);
     try {
       const now  = new Date().toISOString();
-      const date = todayCard.date;
-      const fact_items: ShiftCardItem[] = todayCard.plan_items.map(it => ({
+      const date = effectiveCard.date;
+      const fact_items: ShiftCardItem[] = effectiveCard.plan_items.map(it => ({
         posId: it.posId, lengthMm: it.lengthMm, qty: getFact(it.posId, it.qty),
       }));
 
@@ -388,13 +395,13 @@ export default function WorkPlanCalculator({ positions }: Props) {
         });
       }));
 
-      await fetch(`/api/workcards/${todayCard.id}`, {
+      await fetch(`/api/workcards/${effectiveCard!.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'confirmed', fact_items, fixed_at: now, stock_applied: true }),
       });
 
-      const updated = { ...todayCard, status: 'confirmed' as const, fact_items, fixed_at: now, stock_applied: true };
-      setHistoryCards(prev => prev.map(c => c.id === todayCard.id ? updated : c));
+      const updated: ShiftCard = { ...effectiveCard!, status: 'confirmed', fact_items, fixed_at: now, stock_applied: true };
+      setHistoryCards(prev => prev.map(c => c.id === effectiveCard!.id ? updated : c));
       await refreshPositions();
     } finally { setConfirming(false); }
   }
@@ -669,8 +676,8 @@ export default function WorkPlanCalculator({ positions }: Props) {
               );
             })()}
             {isConfirmed && (() => {
-              const factUnits = todayCard!.fact_items.reduce((s, i) => s + i.qty, 0);
-              const k = cardKits(todayCard!.fact_items);
+              const factUnits = effectiveCard!.fact_items.reduce((s, i) => s + i.qty, 0);
+              const k = cardKits(effectiveCard!.fact_items);
               return (
                 <div>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-c4 mr-2">Факт</span>
@@ -692,9 +699,42 @@ export default function WorkPlanCalculator({ positions }: Props) {
                   onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d97706')}>
                   ＋ Нова зміна
                 </button>
+                <button type="button" onClick={() => setNewCardMode(true)}
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white"
+                  style={{ backgroundColor: '#6366f1' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#4f46e5')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#6366f1')}>
+                  ＋ Новий звіт
+                </button>
               </>
             ) : isIssued ? (
-              <span className="text-[12px] font-semibold text-amber-600 dark:text-amber-400">▶ Видано в роботу · керуйте в журналі</span>
+              <>
+                <span className="text-[12px] font-semibold text-amber-600 dark:text-amber-400">▶ Видано в роботу · керуйте в журналі</span>
+                <button type="button" onClick={() => setNewCardMode(true)}
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white"
+                  style={{ backgroundColor: '#6366f1' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#4f46e5')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#6366f1')}>
+                  ＋ Новий звіт
+                </button>
+              </>
+            ) : newCardMode && todayCard ? (
+              <>
+                <button type="button" onClick={issueCard} disabled={issuing || cardItems.length === 0}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-semibold text-white transition-all disabled:opacity-40"
+                  style={{ backgroundColor: '#d97706' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#b45309')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d97706')}>
+                  {issuing ? '...' : '▶ Видати в роботу'}
+                </button>
+                <button type="button" onClick={() => setNewCardMode(false)}
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+                  style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--cc2)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--cc4)')}>
+                  ← Назад
+                </button>
+              </>
             ) : (
               <button type="button" onClick={issueCard} disabled={issuing || cardItems.length === 0}
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-semibold text-white transition-all disabled:opacity-40"
