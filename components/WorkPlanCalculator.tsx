@@ -25,10 +25,6 @@ type PrintData = {
 
 function isoToday() { return new Date().toISOString().split('T')[0]; }
 function fmtDate(iso: string) { return iso.split('-').reverse().join('.'); }
-function nextDay(iso: string) {
-  const d = new Date(iso); d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
-}
 
 // ── Stepper ──────────────────────────────────────────────────────────────────
 function Stepper({ label, value, onChange, disabled }: {
@@ -656,13 +652,6 @@ export default function WorkPlanCalculator({ positions }: Props) {
             {isConfirmed ? (
               <>
                 <span className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">✓ Зафіксовано на склад</span>
-                <button type="button" onClick={() => setCardDate(nextDay(cardMeta.date))}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white"
-                  style={{ backgroundColor: '#d97706' }}
-                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#b45309')}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d97706')}>
-                  ＋ Нова зміна
-                </button>
                 <button type="button" onClick={() => setNewCardMode(true)}
                   className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white"
                   style={{ backgroundColor: '#6366f1' }}
