@@ -79,6 +79,27 @@ export interface WorkCard {
   status: 'issued' | 'confirmed' | 'cancelled';
 }
 
+export interface ShiftCardItem {
+  posId: string;
+  lengthMm: number;
+  qty: number;
+}
+
+export interface ShiftCard {
+  id: string;
+  date: string;
+  workers_count: number;
+  plan_per_worker: number;
+  total_plan: number;
+  status: 'issued' | 'confirmed' | 'cancelled';
+  stock_applied: boolean;
+  plan_items: ShiftCardItem[];
+  fact_items: ShiftCardItem[];
+  created_at: string;
+  fixed_at: string;
+  cancelled_at: string;
+}
+
 export interface EmployeeStats extends Employee {
   todayQty: number;
   weekQty: number;

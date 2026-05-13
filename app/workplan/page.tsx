@@ -1,4 +1,4 @@
-import { getKitStats, getEmployees } from '@/lib/data';
+import { getKitStats } from '@/lib/data';
 import WorkPlanCalculator from '@/components/WorkPlanCalculator';
 import InfoTooltip from '@/components/InfoTooltip';
 
@@ -7,10 +7,9 @@ export const dynamic = 'force-dynamic';
 export default async function WorkPlanPage() {
   let error = '';
   let positions: { id: string; lengthMm: number; qtyPerPostomat: number; available: number }[] = [];
-  let employees: { id: string; fullName: string }[] = [];
 
   try {
-    const [stats, emps] = await Promise.all([getKitStats(), getEmployees()]);
+    const stats = await getKitStats();
     positions = stats.positions
       .filter(p => p.qtyPerPostomat > 0)
       .map(p => ({
@@ -19,7 +18,6 @@ export default async function WorkPlanPage() {
         qtyPerPostomat: p.qtyPerPostomat,
         available: p.available,
       }));
-    employees = emps.map(e => ({ id: e.id, fullName: e.fullName }));
   } catch (e: unknown) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -48,7 +46,7 @@ export default async function WorkPlanPage() {
           <p><b>Друкувати</b> — відкриває попередній перегляд A4, кожен працівник на окремому аркуші.</p>
         </InfoTooltip>
       </div>
-      <WorkPlanCalculator positions={positions} employees={employees} />
+      <WorkPlanCalculator positions={positions} />
     </div>
   );
 }

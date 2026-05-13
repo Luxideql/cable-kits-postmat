@@ -2,7 +2,7 @@ import StatsCard from '@/components/StatsCard';
 import PositionsTable from '@/components/PositionsTable';
 import InfoTooltip from '@/components/InfoTooltip';
 import BarChart from '@/components/BarChart';
-import { getKitStats, getDailyReports, getShipments, getWorkCards } from '@/lib/data';
+import { getKitStats, getDailyReports, getShipments, getShiftCards } from '@/lib/data';
 import { getTodayDate, formatDate } from '@/lib/calculations';
 import type { DayBar } from '@/components/BarChart';
 import type { ReactNode } from 'react';
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
       getKitStats(),
       getDailyReports(),
       getShipments(),
-      getWorkCards(),
+      getShiftCards(),
     ]);
     kitStats = stats;
     recentShipments = shipments.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
@@ -58,7 +58,10 @@ export default async function DashboardPage() {
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
 
     const confirmedCards = allCards.filter(c => c.status === 'confirmed');
-    const cardQty = (c: typeof confirmedCards[0]) => c.tasks.reduce((s, t) => s + t.actualQty, 0);
+    const cardQty = (c: typeof confirmedCards[0]) => {
+      const items = c.fact_items.length > 0 ? c.fact_items : c.plan_items;
+      return items.reduce((s, i) => s + i.qty, 0);
+    };
     cardsTodayQty   = confirmedCards.filter(c => c.date === today).reduce((s, c) => s + cardQty(c), 0);
     cardsTodayCount = confirmedCards.filter(c => c.date === today).length;
     cardsWeekQty    = confirmedCards.filter(c => c.date >= weekAgo).reduce((s, c) => s + cardQty(c), 0);

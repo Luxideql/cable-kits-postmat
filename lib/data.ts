@@ -2,7 +2,7 @@ import {
   sheetGet, sheetBatchGet, sheetAppend, sheetUpdate, sheetUpdateFormula, sheetUpsert, sheetEnsure, rowsToObjects,
 } from './googleSheets';
 import { calcKitStats } from './calculations';
-import type { Employee, Position, ProductionPlan, DailyReport, KitStats, PositionStats, Shipment, WorkCard, Material } from './types';
+import type { Employee, Position, ProductionPlan, DailyReport, KitStats, PositionStats, Shipment, WorkCard, ShiftCard, Material } from './types';
 import { getTodayDate } from './calculations';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -313,6 +313,71 @@ export async function updateWorkCard(
   if (updates.status !== undefined) {
     await sheetUpdate(`WorkCards!F${idx + 1}`, [[updates.status]]);
   }
+}
+
+// ─── Shift Cards ─────────────────────────────────────────────────────────────
+// A:L — id | date | workers_count | plan_per_worker | total_plan | status |
+//         stock_applied | plan_items | fact_items | created_at | fixed_at | cancelled_at
+
+const SHIFTCARD_HEADERS = [
+  'id', 'date', 'workers_count', 'plan_per_worker', 'total_plan',
+  'status', 'stock_applied', 'plan_items', 'fact_items',
+  'created_at', 'fixed_at', 'cancelled_at',
+];
+
+function parseShiftCard(r: Record<string, string>): ShiftCard {
+  return {
+    id:             r.id,
+    date:           r.date,
+    workers_count:  Number(r.workers_count)  || 0,
+    plan_per_worker: Number(r.plan_per_worker) || 0,
+    total_plan:     Number(r.total_plan)     || 0,
+    status:         (r.status || 'issued') as ShiftCard['status'],
+    stock_applied:  r.stock_applied === 'true',
+    plan_items:     JSON.parse(r.plan_items  || '[]'),
+    fact_items:     JSON.parse(r.fact_items  || '[]'),
+    created_at:     r.created_at    || '',
+    fixed_at:       r.fixed_at      || '',
+    cancelled_at:   r.cancelled_at  || '',
+  };
+}
+
+export async function getShiftCards(): Promise<ShiftCard[]> {
+  try {
+    await sheetEnsure('ShiftCards', SHIFTCARD_HEADERS);
+    const rows = await sheetGet('ShiftCards!A:L');
+    return rowsToObjects(rows).map(parseShiftCard);
+  } catch { return []; }
+}
+
+export async function addShiftCard(card: Omit<ShiftCard, 'id'>): Promise<{ id: string }> {
+  await sheetEnsure('ShiftCards', SHIFTCARD_HEADERS);
+  const id = genId('sc');
+  await sheetAppend('ShiftCards!A:L', [
+    id, card.date,
+    String(card.workers_count), String(card.plan_per_worker), String(card.total_plan),
+    card.status, String(card.stock_applied),
+    JSON.stringify(card.plan_items), JSON.stringify(card.fact_items),
+    card.created_at, card.fixed_at, card.cancelled_at,
+  ]);
+  return { id };
+}
+
+export async function updateShiftCard(
+  id: string,
+  updates: Partial<Pick<ShiftCard, 'status' | 'stock_applied' | 'fact_items' | 'fixed_at' | 'cancelled_at'>>,
+): Promise<void> {
+  const rows = await sheetGet('ShiftCards!A:L');
+  const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
+  if (idx < 1) return;
+  const patches: Promise<void>[] = [];
+  // F=status G=stock_applied I=fact_items K=fixed_at L=cancelled_at
+  if (updates.status        !== undefined) patches.push(sheetUpdate(`ShiftCards!F${idx + 1}`, [[updates.status]]));
+  if (updates.stock_applied !== undefined) patches.push(sheetUpdate(`ShiftCards!G${idx + 1}`, [[String(updates.stock_applied)]]));
+  if (updates.fact_items    !== undefined) patches.push(sheetUpdate(`ShiftCards!I${idx + 1}`, [[JSON.stringify(updates.fact_items)]]));
+  if (updates.fixed_at      !== undefined) patches.push(sheetUpdate(`ShiftCards!K${idx + 1}`, [[updates.fixed_at]]));
+  if (updates.cancelled_at  !== undefined) patches.push(sheetUpdate(`ShiftCards!L${idx + 1}`, [[updates.cancelled_at]]));
+  await Promise.all(patches);
 }
 
 // ─── Materials ────────────────────────────────────────────────────────────────
