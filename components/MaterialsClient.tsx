@@ -325,6 +325,10 @@ export default function MaterialsClient({
                     Закуплено
                     <ColTip>Загальний запас матеріалу на складі. Натисніть на цифру щоб змінити.</ColTip>
                   </th>
+                  <th className="th text-center min-w-[80px]">
+                    На проект
+                    <ColTip>Скільки комплектів покриває вся закуплена кількість: Закуплено ÷ Норма на 1 компл.</ColTip>
+                  </th>
                   <th className="th text-center min-w-[88px]">
                     Залишок
                     <ColTip>Закуплено − (база × норма/компл.). Скільки матеріалу залишилось після списання на вже зроблені комплекти.</ColTip>
@@ -383,6 +387,17 @@ export default function MaterialsClient({
 
                       {/* Закуплено (editable) */}
                       <StockCell id={c.id} field="stockMain" value={c.stockMain} saving={saving} onSave={patchStock} />
+
+                      {/* На проект — скільки компл. покриває закуплена кількість */}
+                      <td className="px-3 py-3 text-center">
+                        {c.qtyPerKit > 0 ? (
+                          <span className="text-[13px] tabular-nums font-semibold text-indigo-600 dark:text-indigo-400">
+                            {Math.floor(c.stockMain / c.qtyPerKit)}
+                          </span>
+                        ) : (
+                          <span className="text-[12px] text-c4">—</span>
+                        )}
+                      </td>
 
                       {/* Залишок (calculated) */}
                       <td className="px-3 py-3 text-center">
