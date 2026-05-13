@@ -692,31 +692,9 @@ export default function WorkPlanCalculator({ positions }: Props) {
                   onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d97706')}>
                   ＋ Нова зміна
                 </button>
-                <button type="button" onClick={() => cancelCard(todayCard!)} disabled={cancelling}
-                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40"
-                  style={{ border: '1px solid var(--cbrd)', color: 'var(--cc4)' }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--cc4)')}>
-                  {cancelling ? '...' : '↩ Скасувати'}
-                </button>
               </>
             ) : isIssued ? (
-              <>
-                <button type="button" onClick={confirmCard} disabled={confirming}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white transition-all disabled:opacity-50"
-                  style={{ backgroundColor: '#059669' }}
-                  onMouseEnter={e => { if (!confirming) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#047857'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#059669'; }}>
-                  {confirming ? '...' : '✓ Зафіксувати'}
-                </button>
-                <button type="button" onClick={() => cancelCard(todayCard!)} disabled={cancelling}
-                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40"
-                  style={{ border: '1px solid #ef4444', color: '#ef4444' }}
-                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)')}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
-                  {cancelling ? '...' : '✕ Скасувати'}
-                </button>
-              </>
+              <span className="text-[12px] font-semibold text-amber-600 dark:text-amber-400">▶ Видано в роботу · керуйте в журналі</span>
             ) : (
               <button type="button" onClick={issueCard} disabled={issuing || cardItems.length === 0}
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-semibold text-white transition-all disabled:opacity-40"
@@ -883,7 +861,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
                                   style={{ border: '1px solid #6366f1', color: '#6366f1' }}
                                   onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(99,102,241,0.08)')}
                                   onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
-                                  {restoringId === card.id ? '...' : '↩ Відновити'}
+                                  {restoringId === card.id ? '...' : '↩ Відмінити'}
                                 </button>
                                 <button type="button" onClick={() => deleteCard(card)} disabled={deletingId === card.id}
                                   className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40"
