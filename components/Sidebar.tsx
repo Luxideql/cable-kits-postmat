@@ -81,7 +81,6 @@ const Icon = {
 const NAV = [
   { href: '/dashboard',  label: 'Дашборд',    icon: Icon.Dashboard  },
   { href: '/employees',  label: 'Працівники',  icon: Icon.Users      },
-  { href: '/kits',       label: 'Комплекти',   icon: Icon.Box        },
   { href: '/materials',  label: 'Матеріали',   icon: Icon.Wrench     },
   { href: '/production', label: 'Виробіток',   icon: Icon.Layers     },
   { href: '/workplan',   label: 'Норма',        icon: Icon.Target     },
