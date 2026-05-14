@@ -282,9 +282,14 @@ export default function WorkPlanCalculator({ positions }: Props) {
         body: JSON.stringify({ id: p.id, stock }),
       });
     }));
-    await refreshPositions();
+    // Optimistic update — don't wait for Sheets cache to propagate
+    setLocalPositions(prev => prev.map(p => {
+      const physical = recountMap[p.id];
+      return physical !== undefined ? { ...p, available: physical } : p;
+    }));
     setShowRecount(false);
     setRecounting(false);
+    refreshPositions(); // background sync
   }
 
   // Reset newCardMode when user changes the date
@@ -415,7 +420,12 @@ export default function WorkPlanCalculator({ positions }: Props) {
 
       const updated: ShiftCard = { ...effectiveCard!, status: 'confirmed', fact_items, fixed_at: now, stock_applied: true };
       setHistoryCards(prev => prev.map(c => c.id === effectiveCard!.id ? updated : c));
-      await refreshPositions();
+      // Optimistic update: add produced units immediately without waiting for Sheets
+      setLocalPositions(prev => prev.map(p => {
+        const item = fact_items.find(it => it.posId === p.id);
+        return item ? { ...p, available: p.available + item.qty } : p;
+      }));
+      refreshPositions(); // background sync
     } finally { setConfirming(false); }
   }
 
@@ -442,7 +452,13 @@ export default function WorkPlanCalculator({ positions }: Props) {
       });
       const updated = { ...card, status: 'cancelled' as const, cancelled_at: now, stock_applied: didRollback ? false : card.stock_applied };
       setHistoryCards(prev => prev.map(c => c.id === card.id ? updated : c));
-      if (didRollback) await refreshPositions();
+      if (didRollback) {
+        setLocalPositions(prev => prev.map(p => {
+          const item = card.fact_items.find(it => it.posId === p.id);
+          return item ? { ...p, available: Math.max(0, p.available - item.qty) } : p;
+        }));
+        refreshPositions();
+      }
     } finally { setCancelling(false); }
   }
 
@@ -477,6 +493,7 @@ export default function WorkPlanCalculator({ positions }: Props) {
       }
       await fetch(`/api/workcards/${card.id}`, { method: 'DELETE' });
       setHistoryCards(prev => prev.filter(c => c.id !== card.id));
+      if (card.stock_applied && card.fact_items.length > 0) refreshPositions();
     } finally { setDeletingId(null); }
   }
 
@@ -502,6 +519,11 @@ export default function WorkPlanCalculator({ positions }: Props) {
       });
       const updated = { ...card, status: 'confirmed' as const, fact_items, fixed_at: now, stock_applied: true };
       setHistoryCards(prev => prev.map(c => c.id === card.id ? updated : c));
+      setLocalPositions(prev => prev.map(p => {
+        const item = fact_items.find(it => it.posId === p.id);
+        return item ? { ...p, available: p.available + item.qty } : p;
+      }));
+      refreshPositions();
     } finally { setConfirmingHistId(null); }
   }
 
