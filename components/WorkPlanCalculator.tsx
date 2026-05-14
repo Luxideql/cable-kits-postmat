@@ -6,7 +6,7 @@ import InfoTooltip from './InfoTooltip';
 const LS_KEY = 'workplan_v5';
 
 type PositionRow = { id: string; lengthMm: number; qtyPerPostomat: number; available: number };
-type Props = { positions: PositionRow[]; shipped: number };
+type Props = { positions: PositionRow[] };
 
 type ShiftCardItem = { posId: string; lengthMm: number; qty: number };
 type ShiftCard = {
@@ -216,7 +216,7 @@ function PrintModal({ card, items, label, onClose }: {
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
-export default function WorkPlanCalculator({ positions, shipped }: Props) {
+export default function WorkPlanCalculator({ positions }: Props) {
   const saved = useMemo(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY) ?? 'null'); } catch { return null; }
   }, []);
@@ -276,10 +276,7 @@ export default function WorkPlanCalculator({ positions, shipped }: Props) {
     setRecounting(true);
     const active = localPositions.filter(p => p.qtyPerPostomat > 0);
     await Promise.all(active.map(p => {
-      // stock = фізичний залишок + всі відправлені × qty
-      // тоді available = stock - shipped×qty = фізичний залишок
-      const physicalUnits = recountMap[p.id] ?? 0;
-      const stock = physicalUnits + shipped * p.qtyPerPostomat;
+      const stock = recountMap[p.id] ?? 0;
       return fetch('/api/positions/stock', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: p.id, stock }),
@@ -796,7 +793,7 @@ export default function WorkPlanCalculator({ positions, shipped }: Props) {
           onClick={() => {
             if (!showRecount) {
               const m: Record<string, number> = {};
-              localPositions.filter(p => p.qtyPerPostomat > 0).forEach(p => { m[p.id] = Math.max(0, p.available); });
+              localPositions.filter(p => p.qtyPerPostomat > 0).forEach(p => { m[p.id] = p.available; });
               setRecountMap(m);
             }
             setShowRecount(v => !v);
@@ -815,7 +812,7 @@ export default function WorkPlanCalculator({ positions, shipped }: Props) {
         {showRecount && (
           <div style={{ borderTop: '1px solid var(--cbrd)' }}>
             <p className="px-5 pt-3 pb-1 text-[12px] text-c4">
-              Введіть скільки штук кожної позиції є <b>фізично на складі зараз</b>. Програма збереже дату сьогодні як точку відліку.
+              Введіть скільки штук кожної позиції є <b>фізично на складі зараз</b>. Після збереження система відраховуватиме від цього числа.
             </p>
             <div className="px-5 pb-4 space-y-2 mt-2">
               {localPositions.filter(p => p.qtyPerPostomat > 0).map(p => (

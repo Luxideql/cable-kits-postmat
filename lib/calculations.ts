@@ -10,10 +10,8 @@ export function calcPositionStats(
     .filter(r => r.positionId === pos.id)
     .reduce((s, r) => s + r.qty, 0);
 
-  const shippedKits = shipments.reduce((s, r) => s + r.qty, 0);
-
-  // stock = фактичний залишок на дату переобліку (або початковий ввід)
-  const available = Math.max(0, pos.stock - shippedKits * pos.qtyPerPostomat);
+  // available = stock (physical count; recount sets baseline, confirms add to it)
+  const available = Math.max(0, pos.stock);
   const kits      = pos.qtyPerPostomat > 0 ? Math.floor(available / pos.qtyPerPostomat) : 0;
   const leftover  = available - kits * pos.qtyPerPostomat;
 

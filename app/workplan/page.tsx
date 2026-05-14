@@ -87,7 +87,7 @@ export default async function WorkPlanPage() {
         }
       </div>
 
-      <WorkPlanCalculator positions={positions} shipped={shipped} />
+      <WorkPlanCalculator positions={positions} />
     </div>
   );
 }
