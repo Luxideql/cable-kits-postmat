@@ -684,7 +684,10 @@ export default function WorkPlanCalculator({ positions }: Props) {
               <span className="text-[15px] font-bold text-c2 tabular-nums">
                 {cardItems.reduce((s, i) => s + i.qty, 0)} шт
               </span>
-              {(() => { const k = cardKits(cardItems); return k > 0 && <span className="text-[12px] text-c4 tabular-nums ml-1">≈{k} к.</span>; })()}
+              {hasCard
+                ? (() => { const k = cardKits(cardItems); return k > 0 ? <span className="text-[12px] text-c4 tabular-nums ml-1">≈{k} к.</span> : null; })()
+                : kitsGain > 0 && <span className="text-[12px] text-c4 tabular-nums ml-1">+{kitsGain} к.</span>
+              }
             </div>
           </div>
 
